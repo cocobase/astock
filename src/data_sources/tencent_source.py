@@ -60,14 +60,45 @@ class TencentDataSource(BaseDataSource):
             return f"us{code}"
         return code
 
+    def _parse_trade_date(self, fields: list) -> Optional[str]:
+        """
+        根据不同市场定义的索引解析交易日期：
+        A股: 索引 30 (YYYYMMDDHHMMSS)
+        港股: 索引 30 (YYYY/MM/DD HH:MM:SS) - 文档说是 28，实测 30
+        美股: 索引 30 (YYYY-MM-DD HH:MM:SS) - 文档说是 28，实测 30
+        """
+        try:
+            # 统一尝试从索引 30 获取
+            if len(fields) <= 30:
+                return None
+            
+            ts_str = fields[30]
+            if not ts_str:
+                return None
+            
+            # A股格式: 20260403161427
+            if len(ts_str) >= 8 and ts_str[:8].isdigit() and '/' not in ts_str and '-' not in ts_str:
+                return f"{ts_str[:4]}-{ts_str[4:6]}-{ts_str[6:8]}"
+            
+            # 港股格式: 2026/04/02 16:08:34
+            if '/' in ts_str:
+                return ts_str.split(' ')[0].replace('/', '-')
+            
+            # 美股格式: 2026-04-02 16:00:02
+            if '-' in ts_str and ' ' in ts_str:
+                return ts_str.split(' ')[0]
+            
+            return None
+        except Exception as e:
+            logger.debug(f"解析时间戳失败: {e}")
+            return None
+
     def fetch_daily_kline(self, stock_code: str, trade_date: datetime) -> Optional[pd.DataFrame]:
         # 由于腾讯接口仅提供实时快照，如果 trade_date 不是今天，我们无法获取历史 K 线
         # 注意：在实际自动化运行中，收盘后运行此程序，trade_date 应为当日
         now = datetime.now()
         if trade_date.date() != now.date():
             logger.warning(f"Tencent DataSource 仅支持获取当日快照，无法获取历史日期 {trade_date.strftime('%Y-%m-%d')} 的数据")
-            # 在某些补录场景下，如果 trade_date 是今天，我们可以继续
-            # 如果不是今天，暂不支持，返回 None
             return None
 
         symbol = self._convert_code(stock_code)
@@ -89,7 +120,6 @@ class TencentDataSource(BaseDataSource):
             val_part = text.split('=', 1)[1].strip().strip('"').strip(';')
             fields = val_part.split('~')
             
-            # 根据市场不同，字段索引基本一致，但单位有所不同
             # 获取市场前缀
             market_prefix = symbol[:2].lower()
             
@@ -113,9 +143,17 @@ class TencentDataSource(BaseDataSource):
                 logger.error(f"解析数据字段失败 ({stock_code}): {e}")
                 return None
 
+            # 获取数据中的实际日期
+            real_date = self._parse_trade_date(fields)
+            if real_date and real_date != trade_date.strftime("%Y-%m-%d"):
+                logger.warning(f"Tencent 接口数据日期 {real_date} 与请求日期 {trade_date.strftime('%Y-%m-%d')} 不一致")
+                final_date = real_date
+            else:
+                final_date = trade_date.strftime("%Y-%m-%d")
+
             # 统一字段映射
             result_df = pd.DataFrame([{
-                KlineFields.TRADE_DATE: trade_date.strftime("%Y-%m-%d"),
+                KlineFields.TRADE_DATE: final_date,
                 KlineFields.STOCK_CODE: stock_code,
                 KlineFields.OPEN: open_price,
                 KlineFields.HIGH: high_price,
@@ -123,7 +161,7 @@ class TencentDataSource(BaseDataSource):
                 KlineFields.CLOSE: close_price,
                 KlineFields.VOLUME: volume,
                 KlineFields.AMOUNT: amount,
-                KlineFields.ADJ_TYPE: AdjType.NONE.value, # 腾讯快照通常是不复权的
+                KlineFields.ADJ_TYPE: AdjType.NONE.value,
                 KlineFields.SOURCE: self.source_name,
                 KlineFields.FETCH_TIME: datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             }])
