@@ -1,0 +1,344 @@
+[
+  {
+    "proxy": "43.99.54.236:5555",
+    "total_checks": 1,
+    "successful_checks": 1,
+    "success_rate": 1.0,
+    "latency_history_ms": [
+      1061
+    ],
+    "avg_latency_ms": 1061,
+    "latest_latency_ms": 1061,
+    "last_success_time": "2026-04-02T01:37:37.021607+00:00",
+    "consecutive_failures": 0,
+    "stage1_ok": true,
+    "stage2_ok": true,
+    "last_origin_ip": "43.99.54.236",
+    "last_finance_target": "eastmoney_quote_api",
+    "last_error": null,
+    "score": 118.78
+  },
+  {
+    "proxy": "59.46.216.131:30001",
+    "total_checks": 1,
+    "successful_checks": 1,
+    "success_rate": 1.0,
+    "latency_history_ms": [
+      1179
+    ],
+    "avg_latency_ms": 1179,
+    "latest_latency_ms": 1179,
+    "last_success_time": "2026-04-02T01:38:14.492603+00:00",
+    "consecutive_failures": 0,
+    "stage1_ok": true,
+    "stage2_ok": true,
+    "last_origin_ip": "59.46.216.137",
+    "last_finance_target": "eastmoney_quote_api",
+    "last_error": null,
+    "score": 116.42
+  },
+  {
+    "proxy": "1.231.81.166:3128",
+    "total_checks": 1,
+    "successful_checks": 1,
+    "success_rate": 1.0,
+    "latency_history_ms": [
+      1315
+    ],
+    "avg_latency_ms": 1315,
+    "latest_latency_ms": 1315,
+    "last_success_time": "2026-04-02T01:33:27.862625+00:00",
+    "consecutive_failures": 0,
+    "stage1_ok": true,
+    "stage2_ok": true,
+    "last_origin_ip": "1.231.81.166",
+    "last_finance_target": "eastmoney_quote_api",
+    "last_error": null,
+    "score": 113.7
+  },
+  {
+    "proxy": "113.160.132.26:8080",
+    "total_checks": 1,
+    "successful_checks": 1,
+    "success_rate": 1.0,
+    "latency_history_ms": [
+      1344
+    ],
+    "avg_latency_ms": 1344,
+    "latest_latency_ms": 1344,
+    "last_success_time": "2026-04-02T01:34:19.145485+00:00",
+    "consecutive_failures": 0,
+    "stage1_ok": true,
+    "stage2_ok": true,
+    "last_origin_ip": "113.160.132.26",
+    "last_finance_target": "eastmoney_quote_api",
+    "last_error": null,
+    "score": 113.12
+  },
+  {
+    "proxy": "120.92.212.16:8890",
+    "total_checks": 1,
+    "successful_checks": 1,
+    "success_rate": 1.0,
+    "latency_history_ms": [
+      1403
+    ],
+    "avg_latency_ms": 1403,
+    "latest_latency_ms": 1403,
+    "last_success_time": "2026-04-02T01:34:30.063593+00:00",
+    "consecutive_failures": 0,
+    "stage1_ok": true,
+    "stage2_ok": true,
+    "last_origin_ip": "60.28.217.71",
+    "last_finance_target": "eastmoney_quote_api",
+    "last_error": null,
+    "score": 111.94
+  },
+  {
+    "proxy": "95.213.217.168:52004",
+    "total_checks": 1,
+    "successful_checks": 1,
+    "success_rate": 1.0,
+    "latency_history_ms": [
+      1807
+    ],
+    "avg_latency_ms": 1807,
+    "latest_latency_ms": 1807,
+    "last_success_time": "2026-04-02T01:39:12.177775+00:00",
+    "consecutive_failures": 0,
+    "stage1_ok": true,
+    "stage2_ok": true,
+    "last_origin_ip": "95.213.217.162",
+    "last_finance_target": "eastmoney_quote_api",
+    "last_error": null,
+    "score": 103.86
+  },
+  {
+    "proxy": "167.103.144.127:8800",
+    "total_checks": 1,
+    "successful_checks": 1,
+    "success_rate": 1.0,
+    "latency_history_ms": [
+      2269
+    ],
+    "avg_latency_ms": 2269,
+    "latest_latency_ms": 2269,
+    "last_success_time": "2026-04-02T01:35:18.315044+00:00",
+    "consecutive_failures": 0,
+    "stage1_ok": true,
+    "stage2_ok": true,
+    "last_origin_ip": "167.103.144.116",
+    "last_finance_target": "eastmoney_quote_api",
+    "last_error": null,
+    "score": 100.0
+  },
+  {
+    "proxy": "167.103.34.108:8800",
+    "total_checks": 1,
+    "successful_checks": 1,
+    "success_rate": 1.0,
+    "latency_history_ms": [
+      2702
+    ],
+    "avg_latency_ms": 2702,
+    "latest_latency_ms": 2702,
+    "last_success_time": "2026-04-02T01:35:24.848526+00:00",
+    "consecutive_failures": 0,
+    "stage1_ok": true,
+    "stage2_ok": true,
+    "last_origin_ip": "167.103.34.106",
+    "last_finance_target": "eastmoney_quote_api",
+    "last_error": null,
+    "score": 100.0
+  },
+  {
+    "proxy": "147.161.210.140:8800",
+    "total_checks": 1,
+    "successful_checks": 1,
+    "success_rate": 1.0,
+    "latency_history_ms": [
+      3000
+    ],
+    "avg_latency_ms": 3000,
+    "latest_latency_ms": 3000,
+    "last_success_time": "2026-04-02T01:35:10.268542+00:00",
+    "consecutive_failures": 0,
+    "stage1_ok": true,
+    "stage2_ok": true,
+    "last_origin_ip": "147.161.210.131",
+    "last_finance_target": "eastmoney_quote_api",
+    "last_error": null,
+    "score": 100.0
+  },
+  {
+    "proxy": "190.217.17.10:999",
+    "total_checks": 1,
+    "successful_checks": 1,
+    "success_rate": 1.0,
+    "latency_history_ms": [
+      4165
+    ],
+    "avg_latency_ms": 4165,
+    "latest_latency_ms": 4165,
+    "last_success_time": "2026-04-02T01:36:25.769174+00:00",
+    "consecutive_failures": 0,
+    "stage1_ok": true,
+    "stage2_ok": true,
+    "last_origin_ip": "190.217.17.10",
+    "last_finance_target": "eastmoney_quote_api",
+    "last_error": null,
+    "score": 100.0
+  },
+  {
+    "proxy": "45.167.124.52:8080",
+    "total_checks": 1,
+    "successful_checks": 1,
+    "success_rate": 1.0,
+    "latency_history_ms": [
+      4195
+    ],
+    "avg_latency_ms": 4195,
+    "latest_latency_ms": 4195,
+    "last_success_time": "2026-04-02T01:37:54.126385+00:00",
+    "consecutive_failures": 0,
+    "stage1_ok": true,
+    "stage2_ok": true,
+    "last_origin_ip": "45.167.124.52",
+    "last_finance_target": "eastmoney_quote_api",
+    "last_error": null,
+    "score": 100.0
+  },
+  {
+    "proxy": "16.78.119.130:443",
+    "total_checks": 1,
+    "successful_checks": 1,
+    "success_rate": 1.0,
+    "latency_history_ms": [
+      4342
+    ],
+    "avg_latency_ms": 4342,
+    "latest_latency_ms": 4342,
+    "last_success_time": "2026-04-02T01:35:13.264872+00:00",
+    "consecutive_failures": 0,
+    "stage1_ok": true,
+    "stage2_ok": true,
+    "last_origin_ip": "43.218.15.150",
+    "last_finance_target": "eastmoney_quote_api",
+    "last_error": null,
+    "score": 100.0
+  },
+  {
+    "proxy": "180.250.219.58:53281",
+    "total_checks": 1,
+    "successful_checks": 1,
+    "success_rate": 1.0,
+    "latency_history_ms": [
+      4486
+    ],
+    "avg_latency_ms": 4486,
+    "latest_latency_ms": 4486,
+    "last_success_time": "2026-04-02T01:35:51.720742+00:00",
+    "consecutive_failures": 0,
+    "stage1_ok": true,
+    "stage2_ok": true,
+    "last_origin_ip": "180.250.219.58",
+    "last_finance_target": "eastmoney_quote_api",
+    "last_error": null,
+    "score": 100.0
+  },
+  {
+    "proxy": "20.27.15.111:8561",
+    "total_checks": 1,
+    "successful_checks": 1,
+    "success_rate": 1.0,
+    "latency_history_ms": [
+      4901
+    ],
+    "avg_latency_ms": 4901,
+    "latest_latency_ms": 4901,
+    "last_success_time": "2026-04-02T01:36:39.114271+00:00",
+    "consecutive_failures": 0,
+    "stage1_ok": true,
+    "stage2_ok": true,
+    "last_origin_ip": "20.222.217.57",
+    "last_finance_target": "eastmoney_quote_api",
+    "last_error": null,
+    "score": 100.0
+  },
+  {
+    "proxy": "5.104.87.17:8051",
+    "total_checks": 1,
+    "successful_checks": 1,
+    "success_rate": 1.0,
+    "latency_history_ms": [
+      5917
+    ],
+    "avg_latency_ms": 5917,
+    "latest_latency_ms": 5917,
+    "last_success_time": "2026-04-02T01:38:16.579298+00:00",
+    "consecutive_failures": 0,
+    "stage1_ok": true,
+    "stage2_ok": true,
+    "last_origin_ip": "194.156.98.181",
+    "last_finance_target": "eastmoney_quote_api",
+    "last_error": null,
+    "score": 100.0
+  },
+  {
+    "proxy": "195.19.217.200:3128",
+    "total_checks": 1,
+    "successful_checks": 1,
+    "success_rate": 1.0,
+    "latency_history_ms": [
+      7705
+    ],
+    "avg_latency_ms": 7705,
+    "latest_latency_ms": 7705,
+    "last_success_time": "2026-04-02T01:36:35.898220+00:00",
+    "consecutive_failures": 0,
+    "stage1_ok": true,
+    "stage2_ok": true,
+    "last_origin_ip": "195.19.217.200",
+    "last_finance_target": "eastmoney_quote_api",
+    "last_error": null,
+    "score": 100.0
+  },
+  {
+    "proxy": "200.70.35.2:8080",
+    "total_checks": 1,
+    "successful_checks": 1,
+    "success_rate": 1.0,
+    "latency_history_ms": [
+      8590
+    ],
+    "avg_latency_ms": 8590,
+    "latest_latency_ms": 8590,
+    "last_success_time": "2026-04-02T01:37:01.309708+00:00",
+    "consecutive_failures": 0,
+    "stage1_ok": true,
+    "stage2_ok": true,
+    "last_origin_ip": "201.190.178.191",
+    "last_finance_target": "eastmoney_quote_api",
+    "last_error": null,
+    "score": 100.0
+  },
+  {
+    "proxy": "217.217.249.160:8080",
+    "total_checks": 1,
+    "successful_checks": 1,
+    "success_rate": 1.0,
+    "latency_history_ms": [
+      12395
+    ],
+    "avg_latency_ms": 12395,
+    "latest_latency_ms": 12395,
+    "last_success_time": "2026-04-02T01:37:18.849354+00:00",
+    "consecutive_failures": 0,
+    "stage1_ok": true,
+    "stage2_ok": true,
+    "last_origin_ip": "217.217.249.160",
+    "last_finance_target": "eastmoney_quote_api",
+    "last_error": null,
+    "score": 100.0
+  }
+]
