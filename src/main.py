@@ -8,6 +8,7 @@ from src.data_sources.base import StubDataSource
 from src.data_sources.futu_source import FutuDataSource
 from src.data_sources.akshare_source import AkshareDataSource
 from src.data_sources.yfinance_source import YFinanceDataSource
+from src.data_sources.tencent_source import TencentDataSource
 from src.core.storage import CsvStorage
 from src.constants import Market
 from loguru import logger
@@ -96,6 +97,9 @@ def main():
     yf_cfg = config_loader.get_data_source_settings("yfinance") or {}
     yf_source = YFinanceDataSource(proxy=yf_cfg.get("proxy"))
     manager.register_source(yf_source)
+
+    # 注册真实数据源 (Tencent)
+    manager.register_source(TencentDataSource(proxy=yf_cfg.get("proxy")))
     
     # 4. 按市场迭代执行
     for market_name, m_config in market_configs.items():
