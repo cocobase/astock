@@ -29,7 +29,7 @@ class YFinanceDataSource(BaseDataSource):
 
     def _convert_code(self, stock_code: str) -> str:
         """
-        将代码转换为 yfinance 识别的格式
+        将代码转换为 yfinance 识别的格式，支持 SH.600519 或 600519.SH 等格式
         SH.600519 -> 600519.SS
         SZ.000001 -> 000001.SZ
         HK.00700  -> 0700.HK
@@ -39,19 +39,22 @@ class YFinanceDataSource(BaseDataSource):
         if len(parts) != 2:
             return stock_code
         
-        prefix, code = parts
-        if prefix == "SH":
+        p1, p2 = parts[0].upper(), parts[1].upper()
+        if p1 in ["SH", "SZ", "HK", "US"]:
+            market, code = p1, parts[1]
+        elif p2 in ["SH", "SZ", "HK", "US"]:
+            market, code = p2, parts[0]
+        else:
+            return stock_code
+
+        if market == "SH":
             return f"{code}.SS"
-        elif prefix == "SZ":
+        elif market == "SZ":
             return f"{code}.SZ"
-        elif prefix == "HK":
+        elif market == "HK":
             # 港股在 yfinance 中通常是 4 位代码 + .HK
-            # 如果是 5 位（如 00700），yfinance 也能识别 0700.HK 或 700.HK
-            # 这里统一处理为 code.HK
-            # 去掉前导 0 处理：有些港股是 0005.HK
             return f"{code[-4:]}.HK" if len(code) == 5 and code.startswith('0') else f"{code}.HK"
-        elif prefix == "US":
-            # 美股代码中，yfinance 对 BRK.B 这种处理可能不同，通常是 BRK-B
+        elif market == "US":
             return code.replace('.', '-')
         return code
 

@@ -5,12 +5,12 @@ market_configs:
     calendar: "XSHG"  # SSE 上海证券交易所 (exchange_calendars 使用 ISO 编码)
     timezone: "Asia/Shanghai"
     priority: ["tencent", "yfinance", "akshare"]
-    codes: ["SH.600519", "SH.601398", "SH.601288", "SH.601939", "SH.601857", "SH.600941", "SH.601988", "SZ.300750", "SH.600036", "SH.601318"]
+    codes: ["600900.SH","SH.600519", "SH.601398", "SH.601288", "SH.601939", "SH.601857", "SH.600941", "SH.601988", "SZ.300750", "SH.600036", "SH.601318","688795.SH","000651.SZ","002594.SZ"]
   HK:
     calendar: "XHKG"  # HKEX 港交所
     timezone: "Asia/Hong_Kong"
     priority: ["futu", "tencent","yfinance", "akshare"]
-    codes: ["HK.09988", "HK.00700", "HK.00939", "HK.03968", "HK.00005", "HK.03988", "HK.00941", "HK.01299", "HK.01211", "HK.01398"]
+    codes: ["HK.09988", "HK.00700", "HK.00939", "HK.03968", "HK.00005", "HK.03988", "HK.00941", "HK.01299", "HK.01211", "HK.01398","HK.0981","HK.0883","HK.0100","HK.3469"]
   US:
     calendar: "XNYS"  # NYSE 纽交所
     timezone: "America/New_York"

@@ -26,6 +26,51 @@ class FutuDataSource(BaseDataSource):
                 logger.error(f"连接 FutuOpenD 失败: {e}")
                 self._quote_ctx = None
 
+    def _format_code(self, stock_code: str) -> str:
+        """
+        将代码转换为富途 API 识别的格式: MARKET.CODE
+        支持自动补全港股 5 位代码，并处理 A 股和美股的格式。
+        
+        示例:
+        SH.600519 -> SH.600519
+        SZ.000001 -> SZ.000001
+        HK.700    -> HK.00700
+        HK.00700  -> HK.00700
+        US.AAPL   -> US.AAPL
+        """
+        if not stock_code:
+            return stock_code
+
+        # 统一处理带有市场前缀的情况 (如 SH.600000, HK.700)
+        if '.' in stock_code:
+            parts = stock_code.split('.')
+            market, code = parts[0].upper(), parts[1]
+            if market == "HK":
+                return f"HK.{code.zfill(5)}"
+            elif market in ["SH", "SZ"]:
+                return f"{market}.{code.zfill(6)}"
+            elif market == "US":
+                return f"US.{code.upper()}"
+            return f"{market}.{code}"
+
+        # 尝试兼容不带前缀的代码 (增加健壮性)
+        # 1. 5位及以下纯数字 -> 港股
+        if stock_code.isdigit() and len(stock_code) <= 5:
+            return f"HK.{stock_code.zfill(5)}"
+        
+        # 2. 6位纯数字 -> A股 (尝试根据首位大致区分 SH/SZ)
+        if stock_code.isdigit() and len(stock_code) == 6:
+            if stock_code.startswith(('6', '9')): # 上海
+                return f"SH.{stock_code}"
+            else: # 深圳等
+                return f"SZ.{stock_code}"
+
+        # 3. 纯字母 -> 美股
+        if stock_code.isalpha():
+            return f"US.{stock_code.upper()}"
+
+        return stock_code.upper()
+
     def health_check(self) -> bool:
         self._ensure_connected()
         if self._quote_ctx:
@@ -42,12 +87,12 @@ class FutuDataSource(BaseDataSource):
         if not self._quote_ctx:
             return None
 
+        formatted_code = self._format_code(stock_code)
         date_str = trade_date.strftime("%Y-%m-%d")
         
         # 富途 API 获取历史K线 (新版接口返回 3 个值: ret, data, page_req_key)
-        # 参考 exam.py，使用 Session.ALL 并推荐使用枚举
         ret, data, page_req_key = self._quote_ctx.request_history_kline(
-            code=stock_code,
+            code=formatted_code,
             start=date_str,
             end=date_str,
             ktype=KLType.K_DAY,
@@ -56,7 +101,7 @@ class FutuDataSource(BaseDataSource):
         )
 
         if ret != RET_OK:
-            logger.error(f"富途数据源获取失败 ({stock_code} @ {date_str}): {data}")
+            logger.error(f"富途数据源获取失败 ({formatted_code} @ {date_str}): {data}")
             return None
 
         if data.empty:

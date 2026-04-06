@@ -49,12 +49,20 @@ class TencentDataSource(BaseDataSource):
             return False
 
     def _transform_symbol(self, stock_code: str, for_hist: bool = False) -> str:
-        """转换代码格式"""
+        """转换代码格式，支持 SH.600519 或 600519.SH 等格式"""
         parts = stock_code.split('.')
         if len(parts) != 2:
             return stock_code.lower()
         
-        market, code = parts
+        p1, p2 = parts[0].upper(), parts[1].upper()
+        # 识别哪个部分是市场，哪个部分是代码
+        if p1 in ["SH", "SZ", "HK", "US"]:
+            market, code = p1, parts[1]
+        elif p2 in ["SH", "SZ", "HK", "US"]:
+            market, code = p2, parts[0]
+        else:
+            return stock_code.lower()
+
         if market == "SH":
             return f"sh{code}"
         elif market == "SZ":
@@ -68,7 +76,7 @@ class TencentDataSource(BaseDataSource):
             return f"us{code}"
         return code.lower()
 
-    def _build_hist_url(self, symbol: str, start_date: str, end_date: str, adj: str) -> str:
+    def _build_hist_url(self, symbol: str, start_date: str, end_date: str, adj: str, count: int = 1) -> str:
         """构造历史 K 线请求 URL"""
         market = symbol[:2].lower()
         base_url = self._hist_url
@@ -78,8 +86,8 @@ class TencentDataSource(BaseDataSource):
             base_url = self._hk_hist_url
             
         adj_param = adj if adj in ['qfq', 'hfq'] else ""
-        # 数量设为 320 以确保能覆盖到目标日期
-        param = f"{symbol},day,{start_date},{end_date},320,{adj_param}"
+        # count 默认为 1，获取指定范围内的记录条数
+        param = f"{symbol},day,{start_date},{end_date},{count},{adj_param}"
         return f"{base_url}?param={param}"
 
     def _fetch_from_snapshot(self, stock_code: str, trade_date: datetime) -> Optional[pd.DataFrame]:
