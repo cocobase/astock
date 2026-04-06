@@ -58,51 +58,37 @@ class YFinanceDataSource(BaseDataSource):
             return code.replace('.', '-')
         return code
 
-    def fetch_daily_kline(self, stock_code: str, trade_date: datetime) -> Optional[pd.DataFrame]:
-        # yfinance 的 download 接口中 end 是不包含的，所以要取 trade_date + 1
-        start_date_str = trade_date.strftime("%Y-%m-%d")
-        end_date = trade_date + timedelta(days=1)
-        end_date_str = end_date.strftime("%Y-%m-%d")
-        
+    def fetch_historical_kline(self, stock_code: str, start_date: datetime, end_date: datetime) -> Optional[pd.DataFrame]:
+        """批量获取历史K线数据"""
         symbol = self._convert_code(stock_code)
+        start_str = start_date.strftime("%Y-%m-%d")
+        # yfinance 的 end 是不包含的
+        end_str = (end_date + timedelta(days=1)).strftime("%Y-%m-%d")
         
         try:
-            # yfinance 默认返回复权后的数据 (auto_adjust=True 会把 Close 变成 Adj Close)
-            # 我们这里为了保持统一，使用 progress=False 且不打印信息
-            # 使用 session 参数代替 proxy 参数以解决版本不兼容问题
             df = yf.download(
                 symbol,
-                start=start_date_str,
-                end=end_date_str,
+                start=start_str,
+                end=end_str,
                 session=self._session,
                 progress=False,
-                auto_adjust=False # 获取原始 OHLC + Adj Close
+                auto_adjust=False
             )
             
             if df is None or df.empty:
-                logger.warning(f"yfinance 未能获取到数据: {stock_code} ({symbol}) @ {start_date_str}")
                 return None
 
-            # 统一字段映射
-            # yfinance 返回字段: Open, High, Low, Close, Adj Close, Volume
-            result_df = pd.DataFrame()
-            
-            # 处理 MultiIndex 情况 (yfinance 某些版本对于单股票也会返回 MultiIndex)
             if isinstance(df.columns, pd.MultiIndex):
-                # 如果是多索引，第一个级别通常是字段名
                 df.columns = df.columns.get_level_values(0)
 
-            result_df[KlineFields.TRADE_DATE] = [trade_date.strftime("%Y-%m-%d")]
+            result_df = pd.DataFrame()
+            result_df[KlineFields.TRADE_DATE] = df.index.strftime("%Y-%m-%d")
             result_df[KlineFields.STOCK_CODE] = stock_code
             result_df[KlineFields.OPEN] = df["Open"].values
             result_df[KlineFields.HIGH] = df["High"].values
             result_df[KlineFields.LOW] = df["Low"].values
-            # 如果是前复权，我们取 Adj Close 还是 Close？
-            # 为了与其他源保持一致，这里逻辑根据项目需求定。
-            # 通常 yf 的 Adj Close 是包含了分红拆股的。
             result_df[KlineFields.CLOSE] = df["Adj Close"].values if "Adj Close" in df.columns else df["Close"].values
             result_df[KlineFields.VOLUME] = df["Volume"].values
-            # yfinance 不直接提供成交额 (Amount)，可以用成交量 * 收盘价估算，或者留空
             result_df[KlineFields.AMOUNT] = df["Volume"].values * df["Close"].values
             result_df[KlineFields.ADJ_TYPE] = AdjType.QFQ.value
             result_df[KlineFields.SOURCE] = self.source_name
@@ -111,5 +97,9 @@ class YFinanceDataSource(BaseDataSource):
             return result_df
 
         except Exception as e:
-            logger.error(f"yfinance 获取数据异常 ({stock_code}): {e}")
+            logger.error(f"yfinance 批量获取异常 ({stock_code}): {e}")
             return None
+
+    def fetch_daily_kline(self, stock_code: str, trade_date: datetime) -> Optional[pd.DataFrame]:
+        """复用批量获取接口"""
+        return self.fetch_historical_kline(stock_code, trade_date, trade_date)

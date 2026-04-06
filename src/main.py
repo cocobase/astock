@@ -17,13 +17,16 @@ from loguru import logger
 def parse_args():
     parser = argparse.ArgumentParser(description="多市场收盘日K获取系统")
     parser.add_argument("--status", action="store_true", help="只显示所有市场状态后结束")
-    parser.add_argument("--run", action="store_true", help="执行下载任务")
+    parser.add_argument("--run", action="store_true", help="执行增量下载任务")
+    parser.add_argument("--init", action="store_true", help="初始化历史K线数据（会清空现有数据）")
+    parser.add_argument("--days", type=int, default=365, help="初始化历史天数，默认365天")
     args = parser.parse_args()
 
-    if args.status and args.run:
-        parser.error("--status 与 --run 不能同时使用")
-    if not args.status and not args.run:
-        parser.error("必须指定 --status 或 --run")
+    active_modes = [args.status, args.run, args.init]
+    if sum(active_modes) > 1:
+        parser.error("--status, --run, --init 不能同时使用")
+    if sum(active_modes) == 0:
+        parser.error("必须指定 --status, --run 或 --init")
 
     return args
 
@@ -76,6 +79,14 @@ def main():
 
     storage = CsvStorage(root_path=global_settings.get("storage_root", "./data"))
     
+    if args.init:
+        confirm = input("[WARNING] 此操作将清空 ./data 目录下所有市场数据！是否确认? [y/N]: ")
+        if confirm.lower() != 'y':
+            logger.info("用户取消初始化。")
+            return
+        logger.warning("正在清理现有数据目录...")
+        storage.clear_market_data()
+
     # 3. 初始化数据源管理器
     manager = DataSourceManager(
         retry_count=global_settings.get("retry_count", 2),
@@ -108,49 +119,62 @@ def main():
         priority = m_config.get("priority", [])
         codes = m_config.get("codes", [])
         
-        # 获取市场交易状态与最后一个交易日
+        # 获取市场交易状态
         market_status = calendar_checker.get_market_trading_status(exchange_code, timezone)
-        target_date = datetime.strptime(market_status.last_trading_day, "%Y-%m-%d")
-        date_str = target_date.strftime("%Y-%m-%d")
+        
+        if args.init:
+            # 初始化逻辑：获取最近 N 个交易日作为范围
+            logger.info(f"开始初始化市场: {market_name} (深度: {args.days} 天)")
+            trading_days = calendar_checker.get_recent_trading_days(exchange_code, args.days)
+            if not trading_days:
+                logger.error(f"无法获取市场 {market_name} 的交易日列表，跳过")
+                continue
+            
+            start_date = trading_days[0]
+            end_date = trading_days[-1]
+            logger.info(f"时间范围: {start_date.strftime('%Y-%m-%d')} 至 {end_date.strftime('%Y-%m-%d')}")
+            
+            success_count = 0
+            fail_count = 0
+            
+            for code in codes:
+                logger.info(f"[{market_name}] 初始化标的: {code}")
+                data = manager.fetch_historical_with_failover(priority, code, start_date, end_date)
+                
+                if data is not None and not data.empty:
+                    storage.save_data(data, market_name)
+                    success_count += 1
+                else:
+                    logger.error(f"标的 {code} 初始化失败")
+                    fail_count += 1
+            
+            logger.info(f"市场 {market_name} 初始化完成: 成功 {success_count}, 失败 {fail_count}")
 
-        logger.info(
-            f"市场: {market_name} | 市场当前时间: {market_status.market_now} | "
-            f"今日是否交易日: {market_status.is_trading_day_today} | "
-            f"当日交易时段是否结束: {market_status.is_current_session_closed} | "
-            f"最后一个交易日: {market_status.last_trading_day} | "
-            f"日历来源: {market_status.calendar_source}"
-        )
-            
-        # 5. 执行数据获取与持久化
-        for code in codes:
-            logger.info(f"开始处理标的: {code} ({market_name})")
-            
-            # 按优先级顺序获取数据
-            data = manager.fetch_with_failover(priority, code, target_date)
-            
-            if data is not None and not data.empty:
-                source_used = data.iloc[0]["source"]
-                logger.info(f"标的 {code} 获取成功, 来源: {source_used}")
+        else:
+            # 增量运行逻辑 (--run)
+            target_date = datetime.strptime(market_status.last_trading_day, "%Y-%m-%d")
+            date_str = target_date.strftime("%Y-%m-%d")
+
+            logger.info(
+                f"市场: {market_name} | 最后一个交易日: {market_status.last_trading_day} | "
+                f"日历来源: {market_status.calendar_source}"
+            )
                 
-                # 持久化落地
-                storage.save_data(data, market_name)
+            # 5. 执行数据获取与持久化
+            for code in codes:
+                logger.info(f"开始处理标的: {code} ({market_name})")
                 
-                log_detail(
-                    f"执行时间: {datetime.now()} | 股票: {code} | 市场: {market_name} | "
-                    f"交易日期: {date_str} | 今日是否交易日: {market_status.is_trading_day_today} | "
-                    f"当日交易时段是否结束: {market_status.is_current_session_closed} | "
-                    f"最后一个交易日: {market_status.last_trading_day} | 日历来源: {market_status.calendar_source} | "
-                    f"状态: 成功 | 来源: {source_used}"
-                )
-            else:
-                logger.error(f"标的 {code} 获取失败 (所有数据源均不可用)")
-                log_detail(
-                    f"执行时间: {datetime.now()} | 股票: {code} | 市场: {market_name} | "
-                    f"交易日期: {date_str} | 今日是否交易日: {market_status.is_trading_day_today} | "
-                    f"当日交易时段是否结束: {market_status.is_current_session_closed} | "
-                    f"最后一个交易日: {market_status.last_trading_day} | 日历来源: {market_status.calendar_source} | "
-                    f"状态: 失败 | 原因: 链路所有数据源重试后均失败"
-                )
+                # 按优先级顺序获取数据
+                data = manager.fetch_with_failover(priority, code, target_date)
+                
+                if data is not None and not data.empty:
+                    source_used = data.iloc[0]["source"]
+                    logger.info(f"标的 {code} 获取成功, 来源: {source_used}")
+                    storage.save_data(data, market_name)
+                    log_detail(f"股票: {code} | 市场: {market_name} | 交易日期: {date_str} | 状态: 成功 | 来源: {source_used}")
+                else:
+                    logger.error(f"标的 {code} 获取失败 (所有数据源均不可用)")
+                    log_detail(f"股票: {code} | 市场: {market_name} | 交易日期: {date_str} | 状态: 失败")
 
     # 6. 清理资源
     futu_source.close()

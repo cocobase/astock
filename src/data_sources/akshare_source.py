@@ -43,46 +43,24 @@ class AkshareDataSource(BaseDataSource):
             return code, "US"
         return code, "Unknown"
 
-    def fetch_daily_kline(self, stock_code: str, trade_date: datetime) -> Optional[pd.DataFrame]:
-        date_str = trade_date.strftime("%Y%m%d")
+    def fetch_historical_kline(self, stock_code: str, start_date: datetime, end_date: datetime) -> Optional[pd.DataFrame]:
+        """批量获取历史日K线数据"""
+        start_str = start_date.strftime("%Y%m%d")
+        end_str = end_date.strftime("%Y%m%d")
         symbol, market = self._convert_code(stock_code)
         
         try:
             df = None
             if market == "A-Share":
-                # A 股获取
-                df = ak.stock_zh_a_hist(
-                    symbol=symbol,
-                    period="daily",
-                    start_date=date_str,
-                    end_date=date_str,
-                    adjust="qfq"
-                )
+                df = ak.stock_zh_a_hist(symbol=symbol, period="daily", start_date=start_str, end_date=end_str, adjust="qfq")
             elif market == "HK":
-                # 港股获取
-                df = ak.stock_hk_hist(
-                    symbol=symbol,
-                    period="daily",
-                    start_date=date_str,
-                    end_date=date_str,
-                    adjust="qfq"
-                )
+                df = ak.stock_hk_hist(symbol=symbol, period="daily", start_date=start_str, end_date=end_str, adjust="qfq")
             elif market == "US":
-                # 美股获取
-                df = ak.stock_us_hist(
-                    symbol=symbol,
-                    period="daily",
-                    start_date=date_str,
-                    end_date=date_str,
-                    adjust="qfq"
-                )
+                df = ak.stock_us_hist(symbol=symbol, period="daily", start_date=start_str, end_date=end_str, adjust="qfq")
             
             if df is None or df.empty:
-                logger.warning(f"AKShare 未能获取到数据: {stock_code} @ {trade_date.strftime('%Y-%m-%d')}")
                 return None
 
-            # 统一字段映射
-            # AKShare 返回字段: 日期, 开盘, 收盘, 最高, 最低, 成交量, 成交额, 振幅, 涨跌幅, 涨跌额, 换手率
             result_df = pd.DataFrame()
             result_df[KlineFields.TRADE_DATE] = pd.to_datetime(df["日期"]).dt.strftime("%Y-%m-%d")
             result_df[KlineFields.STOCK_CODE] = stock_code
@@ -99,5 +77,9 @@ class AkshareDataSource(BaseDataSource):
             return result_df
 
         except Exception as e:
-            logger.error(f"AKShare 获取数据异常 ({stock_code}): {e}")
+            logger.error(f"AKShare 历史抓取异常 ({stock_code}): {e}")
             return None
+
+    def fetch_daily_kline(self, stock_code: str, trade_date: datetime) -> Optional[pd.DataFrame]:
+        """复用批量获取接口"""
+        return self.fetch_historical_kline(stock_code, trade_date, trade_date)

@@ -129,6 +129,60 @@ class TencentDataSource(BaseDataSource):
             logger.debug(f"Snapshot fallback failed for {stock_code}: {e}")
             return None
 
+    def fetch_historical_kline(self, stock_code: str, start_date: datetime, end_date: datetime, adj: AdjType = AdjType.QFQ) -> Optional[pd.DataFrame]:
+        """批量获取历史日K线数据"""
+        start_str = start_date.strftime("%Y-%m-%d")
+        end_str = end_date.strftime("%Y-%m-%d")
+        symbol = self._transform_symbol(stock_code, for_hist=True)
+        adj_val = adj.value if adj else "qfq"
+        
+        # 腾讯接口 count 为请求的数据量，通常传较大的值以确保覆盖范围
+        days_diff = (end_date - start_date).days + 10
+        url = self._build_hist_url(symbol, start_str, end_str, adj_val, count=days_diff)
+        
+        try:
+            response = self._session.get(url, timeout=15)
+            data = response.json()
+            if data.get('code') != 0:
+                logger.error(f"Tencent historical error: {data.get('msg', 'Unknown error')}")
+                return None
+            
+            # 提取数据
+            market_data = data.get('data', {}).get(symbol, {})
+            kline_key = f"{adj_val}day" if adj_val else "day"
+            kline_list = market_data.get(kline_key) or market_data.get("day")
+            
+            if not kline_list:
+                return None
+            
+            # 解析为 DataFrame
+            rows = []
+            for k in kline_list:
+                # 腾讯返回格式通常为 [date, open, close, high, low, volume, ...]
+                dt_str = k[0]
+                if start_str <= dt_str <= end_str:
+                    volume = float(k[5])
+                    if symbol.startswith('sh') or symbol.startswith('sz'):
+                        volume *= 100
+                    
+                    rows.append({
+                        KlineFields.TRADE_DATE: dt_str,
+                        KlineFields.STOCK_CODE: stock_code,
+                        KlineFields.OPEN: float(k[1]), KlineFields.CLOSE: float(k[2]),
+                        KlineFields.HIGH: float(k[3]), KlineFields.LOW: float(k[4]),
+                        KlineFields.VOLUME: int(volume),
+                        KlineFields.AMOUNT: float(k[2]) * volume, # 估算金额
+                        KlineFields.ADJ_TYPE: adj_val,
+                        KlineFields.SOURCE: self.source_name,
+                        KlineFields.FETCH_TIME: datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    })
+            
+            return pd.DataFrame(rows) if rows else None
+            
+        except Exception as e:
+            logger.error(f"Tencent historical fetch failed for {stock_code}: {e}")
+            return None
+
     def fetch_daily_kline(self, stock_code: str, trade_date: datetime, adj: AdjType = AdjType.NONE) -> Optional[pd.DataFrame]:
         """主入口"""
         date_str = trade_date.strftime("%Y-%m-%d")
