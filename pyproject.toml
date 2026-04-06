@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "astock"
+version = "1.0.0"
+description = "A multi-source historical K-line fetcher for A-Share, HK, and US markets."
+readme = "README.md"
+requires-python = ">=3.8"
+authors = [
+    {name = "imac", email = "imac@example.com"}
+]
+dependencies = [
+    "pandas",
+    "requests",
+    "pyyaml",
+    "loguru",
+    "exchange-calendars",
+    "yfinance",
+    "futu-api"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "freezegun"
+]
+
+[project.scripts]
+astock = "src.main:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]

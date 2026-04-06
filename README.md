@@ -2,338 +2,129 @@
 
 ## 1. 项目简介
 
-`astock` 是一个面向 **A股 / 港股 / 美股** 的收盘日 K 线自动获取工具。
+`astock` 是一个面向 **A股 / 港股 / 美股** 的多源收盘日 K 线自动获取与持久化工具。
 
-项目目标是：
-
-- 按市场交易日历判断是否应执行下载
-- 只获取 **当前最后一个已完成交易日** 的日 K 数据
-- 支持多数据源按优先级自动切换
-- 将结果标准化后落地到 CSV
-- 保留完整运行日志与下载明细，便于追溯
-
-当前已支持：
-
-- A股
-- 港股
-- 美股
+项目核心目标：
+- **智能调度**：基于 `exchange_calendars` 自动判断各市场交易状态，仅在收盘后或非交易日执行数据补录。
+- **高可靠性**：支持 `tencent`, `futu`, `yfinance`, `akshare` 等多数据源按优先级自动切换（Failover）。
+- **历史回溯**：集成腾讯财经历史 K 线接口，支持全天候补录过去 320 天内的任意交易日数据。
+- **数据标准化**：统一不同数据源的 OHLCV 字段、复权类型（支持 QFQ）及数值单位（A股自动手转股）。
+- **本地持久化**：以 CSV 格式增量存储，自带去重逻辑。
 
 ---
 
-## 2. 当前核心能力
+## 2. 核心能力
 
 ### 2.1 市场状态判断
+系统实时监控三大市场（A股、港股、美股）的交易日历：
+- **自动定位**：准确计算“最后一个交易日”，无论当前是否处于交易时段。
+- **时区感知**：完美处理美股与亚洲市场的时差问题。
 
-基于 `exchange_calendars` 判断各市场当前状态，包括：
+### 2.2 多源数据引擎
+| 数据源 | 覆盖市场 | 优势 | 备注 |
+| :--- | :--- | :--- | :--- |
+| **tencent** | A/HK/US | **推荐**。支持历史、前复权、自动识别美股后缀、响应极快。 | 历史接口缺失 Amount，采用 Close*Volume 估算。 |
+| **futu** | HK | 官方 API，数据极其精准。 | 需本地运行 FutuOpenD 客户端。 |
+| **yfinance** | US | 覆盖面广，原生支持前复权。 | 依赖网络环境。 |
+| **akshare** | A | 备选源。 | - |
 
-- 今日是否为交易日
-- 当前交易时段是否已经结束
-- 当前最后一个交易日日期
+### 2.3 智能代码转换 (Symbol Transformer)
+用户只需在配置中输入标准格式（如 `US.AAPL`, `SH.600519`），系统会自动处理：
+- **A股**: `SH.600519` -> `sh600519`，并处理成交量“手”与“股”的转换。
+- **港股**: `HK.00700` -> `hk00700`。
+- **美股**: 自动匹配交易所后缀（如 `AAPL` -> `usAAPL.OQ`, `WMT` -> `usWMT.N`）。
 
-当前规则：
-
-- 如果今天是交易日且 **已收盘**，最后一个交易日 = 今天
-- 如果今天是交易日但 **未收盘**，最后一个交易日 = 上一个交易日
-- 如果今天 **不是交易日**，最后一个交易日 = 上一个交易日
-
-项目启动时可直接输出三大市场状态总览。
-
-### 2.2 多数据源获取
-
-已接入或预留的数据源：
-
-- `futu`
-- `akshare`
-- `yfinance`
-- `tushare`（配置已预留，当前主流程未实际注册）
-
-各市场支持通过配置设置优先级，单个数据源失败后会自动重试，再切换到下一个数据源。
-
-### 2.3 数据标准化与存储
-
-所有数据源返回的数据会统一为标准字段后写入 CSV。
-
-默认存储路径结构：
-
-```text
-data/{market}/{year}/{market}_{code}_daily_kline.csv
-```
-
-例如：
-
-```text
-data/A-Share/2026/A-Share_SH_600519_daily_kline.csv
-```
-
-写入策略：
-
-- 增量追加
-- 按 `stock_code + trade_date` 去重
-- 不覆盖已有有效记录
-
-### 2.4 日志能力
-
-系统使用双日志：
-
-- `logs/run.log`：系统运行日志
-- `logs/download_detail.log`：逐标的下载明细日志
-
-下载明细日志中会记录：
-
-- 执行时间
-- 股票代码
-- 市场
-- 交易日期
-- 今日是否交易日
-- 当日交易时段是否结束
-- 最后一个交易日
-- 日历来源
-- 成功/失败状态
-- 成功时的数据源
-- 失败原因
+### 2.4 数据存储逻辑
+路径结构：`data/{market}/{year}/{market}_{code}_daily_kline.csv`
+- **增量写入**：仅追加新数据，不破坏历史记录。
+- **严格去重**：基于 `trade_date` 确保唯一性。
 
 ---
 
-## 3. 当前项目结构
+## 3. 项目结构
 
 ```text
 astock/
 ├─ config/
-│  └─ config.yaml                # 项目配置
-├─ data/                         # CSV 数据落地目录
-├─ docs/
-│  ├─ README.md                  # 本文档
-│  ├─ market-prd.md              # 需求文档
-│  ├─ async-plan.md              # 异步化规划
-│  └─ phrase1.md
-├─ logs/                         # 运行日志与明细日志
+│  └─ config.yaml                # 项目配置文件
+├─ data/                         # CSV 数据存储目录
+├─ docs/                         # 设计文档与参考资料
+│  ├─ tencent-hist-migration-design.md # 腾讯历史接口迁移设计
+│  └─ tencent_finance_api_reference.md # 腾讯 API 详细参考
 ├─ src/
-│  ├─ main.py                    # 程序入口
-│  ├─ constants.py               # 枚举与字段常量
+│  ├─ main.py                    # 启动入口
 │  ├─ core/
-│  │  ├─ config_loader.py        # 配置加载
-│  │  ├─ logger.py               # 日志初始化
-│  │  └─ storage.py              # CSV 存储
+│  │  ├─ storage.py              # CSV 存储逻辑
+│  │  └─ manager.py              # 数据源 Failover 调度
 │  ├─ data_sources/
-│  │  ├─ base.py                 # 数据源抽象基类
-│  │  ├─ manager.py              # 数据源调度与 failover
-│  │  ├─ futu_source.py          # 富途数据源
-│  │  ├─ akshare_source.py       # AKShare 数据源
-│  │  └─ yfinance_source.py      # yfinance 数据源
+│  │  ├─ tencent_source.py       # 核心：腾讯财经多源接口 (NEW)
+│  │  ├─ futu_source.py          # 富途牛牛接口
+│  │  └─ yfinance_source.py      # Yahoo Finance 接口
 │  └─ trading_calendar/
-│     └─ checker.py              # 市场交易日历与市场状态判断
-└─ tests/                        # 测试代码
+│     └─ checker.py              # 市场日历校验
+└─ tests/
+    ├─ test_tencent_pytest.py    # 腾讯接口覆盖测试
+    └─ test_trading_calendar_checker.py # 日历逻辑测试
 ```
 
 ---
 
-## 4. 关键模块说明
+## 4. 快速开始
 
-### `src/main.py`
-程序主入口，负责：
-
-- 解析命令行参数
-- 初始化配置与日志
-- 输出市场状态总览
-- 在 `--run` 模式下执行下载流程
-
-### `src/trading_calendar/checker.py`
-交易日历核心模块，负责：
-
-- 加载并缓存交易所日历
-- 判断某天是否交易日
-- 判断交易日是否已收盘
-- 计算当前最后一个交易日
-- 一次性返回所有市场状态
-
-这是“市场状态判断”最合适的归属位置。
-
-### `src/data_sources/manager.py`
-数据源编排模块，负责：
-
-- 按优先级调用数据源
-- 自动重试
-- 自动切换故障数据源
-
-### `src/core/storage.py`
-CSV 落盘模块，负责：
-
-- 生成目标文件路径
-- 增量写入
-- 去重
-
----
-
-## 5. 配置说明
-
-主配置文件：`config/config.yaml`
-
-当前主要配置项：
-
-### 5.1 市场配置
-
-每个市场包含：
-
-- `calendar`：交易所日历编码
-- `timezone`：市场时区
-- `priority`：数据源优先级
-- `codes`：标的列表
-
-当前默认配置：
-
-- A股：`XSHG` / `Asia/Shanghai`
-- 港股：`XHKG` / `Asia/Hong_Kong`
-- 美股：`XNYS` / `America/New_York`
-
-### 5.2 数据源配置
-
-包括：
-
-- `futu.host`
-- `futu.port`
-- `tushare.token`
-- `yfinance.proxy`
-
-### 5.3 全局配置
-
-包括：
-
-- `retry_count`
-- `timeout`
-- `log_rotation`
-- `storage_root`
-- `log_root`
-- `default_adj_type`
-
----
-
-## 6. 命令行使用方式
-
-当前入口支持两个模式：
-
-### 6.1 仅查看市场状态
-
-```bash
-python -m src.main --status
-```
-
-作用：
-
-- 输出 A股 / 港股 / 美股 的当前状态总览
-- 不执行任何下载
-- 返回状态信息如下：
-[US]
-  交易所: XNYS
-  时区: America/New_York
-  当前时间: 2026-04-03 10:14:50-0400
-  当前市场日期: 2026-04-03
-  今日是否交易日: False
-  当日交易时段是否结束: True
-  最后一个交易日: 2026-04-02
-  日历来源: exchange_calendars
-
-### 6.2 执行下载任务
-
-```bash
-python -m src.main --run
-```
-
-作用：
-
-- 输出市场状态总览
-- 然后进入逐市场、逐标的下载流程
-
-### 6.3 参数约束
-
-- `--status` 与 `--run` 不能同时使用
-- 必须显式指定其中一个参数
-
----
-
-## 7. 安装依赖
-
-当前 `requirements.txt` 包含：
-
-- `exchange-calendars>=4.0.0`
-- `pytz`
-- `pyyaml`
-- `loguru`
-- `pandas`
-- `pytest`
-- `freezegun`
-- `futu-api`
-
-建议使用虚拟环境安装：
-
+### 4.1 安装依赖
 ```bash
 pip install -r requirements.txt
 ```
+*注：本项目依赖 `pandas`, `requests`, `exchange_calendars`, `yfinance`, `futu-api` 等库。*
 
-> 说明：如果需要使用港股/美股或富途数据源，请确保本机环境与网络条件满足对应依赖要求。
+### 4.2 配置标的
+编辑 `config/config.yaml`，在对应市场的 `codes` 列表中添加股票：
+```yaml
+market_configs:
+  A-Share:
+    codes: ["SH.600519", "SZ.000858"]
+  US:
+    codes: ["US.NVDA", "US.AAPL"]
+```
 
----
+### 4.3 运行任务
 
-## 8. 当前已实现的市场状态输出
-
-项目现在支持启动时输出“三大市场状态总览”，字段包括：
-
-- 交易所
-- 时区
-- 当前时间
-- 当前市场日期
-- 今日是否交易日
-- 当日交易时段是否结束
-- 最后一个交易日
-- 日历来源
-
-这部分能力主要用于：
-
-- 下载前判断是否应抓取今天数据
-- 快速确认各市场当前状态
-- 作为后续接口化/监控化输出基础
-
----
-
-## 9. 测试现状
-
-当前已补充交易日历相关测试，覆盖以下场景：
-
-- 今天是交易日且已收盘
-- 今天是交易日但未收盘
-- 今天不是交易日
-- 一次性获取多个市场状态
-
-可执行：
-
+**查看市场闭市状态**：
 ```bash
-pytest -q tests/test_trading_calendar_checker.py
+export PYTHONPATH=$PYTHONPATH:.
+python3 src/main.py --status
+```
+
+**执行全量采集**：
+```bash
+python3 src/main.py --run
 ```
 
 ---
 
-## 10. 已知现状与后续可优化项
+## 5. 测试验证
 
-### 已知现状
+系统配备了严谨的测试套件，建议在发布或重大修改后运行：
 
-- `main.py` 使用 `python -m src.main ...` 启动更稳妥
-- `tushare` 目前仅在配置中预留，尚未真正注册到主流程
-- 部分数据源在不同网络环境下稳定性会有差异
-- CSV 存储目前是单文件逐次读取去重，数据量大后可继续优化
+**腾讯接口全覆盖测试 (A/HK/US/复权/降级)**：
+```bash
+pytest tests/test_tencent_pytest.py -v
+```
 
-### 后续建议
-
-- 增加数据源健康检查与启动前预检
-- 增加更友好的状态展示（如中文“是/否”“已结束/未结束”）
-- 将市场状态输出封装为 API 或 CLI 子命令
-- 增加历史补录能力
-- 增加更完整的单元测试与集成测试
+**交易日历逻辑测试**：
+```bash
+pytest tests/test_trading_calendar_checker.py -v
+```
 
 ---
 
-## 11. 相关文档
-
-- `docs/market-prd.md`：需求说明
-- `docs/async-plan.md`：异步化规划
-- `config/config.yaml`：运行配置
-- `src/trading_calendar/checker.py`：市场状态核心逻辑
-- `src/main.py`：程序入口
+## 6. 版本记录 (Roadmap)
+- **V1.0 (Current)**: 
+    - [x] 实现基于腾讯财经的历史 K 线补录。
+    - [x] 支持 A/HK/US 多市场日历感知。
+    - [x] 建立完善的 Failover 数据源调度机制。
+    - [x] 实现美股交易所后缀自动识别逻辑。
+- **Future**:
+    - [ ] 集成飞书/钉钉推送通知。
+    - [ ] 增加环境变量支持（`.env`）以剥离敏感配置。
+    - [ ] 增加 Web 监控看板。

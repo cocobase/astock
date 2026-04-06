@@ -1,8 +1,9 @@
-exchange-calendars>=4.0.0
-pytz
+pandas
+requests
 pyyaml
 loguru
-pandas
+exchange-calendars
+yfinance
+futu-api
 pytest
 freezegun
-futu-api
