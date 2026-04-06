@@ -4,6 +4,7 @@ from dataclasses import dataclass, asdict
 from datetime import datetime, timedelta
 import pytz
 from loguru import logger
+from typing import List, Optional
 
 
 @dataclass
@@ -202,3 +203,45 @@ class CalendarChecker:
     def get_logical_trading_day(self, market_name: str, timezone_str: str) -> datetime:
         """兼容旧接口：返回当前市场最后一个交易日。"""
         return self.get_last_trading_day(market_name, timezone_str)
+
+    def get_recent_trading_days(self, exchange_code: str, days: int, end_date: Optional[datetime] = None) -> List[datetime]:
+        """
+        获取指定交易所最近 N 个交易日的列表。
+        
+        :param exchange_code: 交易所代码 (如 XSHG)
+        :param days: 获取的交易日数量
+        :param end_date: 截止日期（默认为当前市场的最后一个可用交易日）
+        :return: datetime 对象列表（按日期升序排列）
+        """
+        calendar = self.get_calendar(exchange_code)
+        if not calendar:
+            # 兜底：简单回退 N 天并排除周末
+            logger.warning(f"日历不可用，使用兜底逻辑获取最近交易日: {exchange_code}")
+            result = []
+            curr = end_date or datetime.now()
+            while len(result) < days:
+                if curr.weekday() < 5:
+                    result.append(curr.replace(hour=0, minute=0, second=0, microsecond=0))
+                curr -= timedelta(days=1)
+            return sorted(result)
+
+        # 获取基准结束日期
+        if end_date:
+            last_session_str = end_date.strftime("%Y-%m-%d")
+            if calendar.is_session(last_session_str):
+                last_session = pd.Timestamp(last_session_str)
+            else:
+                last_session = calendar.date_to_session(last_session_str, direction="previous")
+        else:
+            # 默认取当前时间点对应的最后一个交易日
+            # 注意：此处不带时区可能导致细微偏差，但在日K线初始化场景下通常可接受
+            today_str = datetime.now().strftime("%Y-%m-%d")
+            if calendar.is_session(today_str):
+                last_session = pd.Timestamp(today_str)
+            else:
+                last_session = calendar.date_to_session(today_str, direction="previous")
+
+        # 使用 sessions_window 获取 N 个交易日 (count 为负数表示向过去回溯)
+        # exchange_calendars 的 sessions_window(base, -N) 返回从 base 开始往前共 N 个 session
+        sessions = calendar.sessions_window(last_session, -days)
+        return [s.to_pydatetime() for s in sessions]

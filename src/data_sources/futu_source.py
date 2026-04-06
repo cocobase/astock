@@ -82,34 +82,33 @@ class FutuDataSource(BaseDataSource):
                     return True
         return False
 
-    def fetch_daily_kline(self, stock_code: str, trade_date: datetime) -> Optional[pd.DataFrame]:
+    def fetch_historical_kline(self, stock_code: str, start_date: datetime, end_date: datetime) -> Optional[pd.DataFrame]:
+        """批量获取历史K线数据"""
         self._ensure_connected()
         if not self._quote_ctx:
             return None
 
         formatted_code = self._format_code(stock_code)
-        date_str = trade_date.strftime("%Y-%m-%d")
+        start_str = start_date.strftime("%Y-%m-%d")
+        end_str = end_date.strftime("%Y-%m-%d")
         
-        # 富途 API 获取历史K线 (新版接口返回 3 个值: ret, data, page_req_key)
         ret, data, page_req_key = self._quote_ctx.request_history_kline(
             code=formatted_code,
-            start=date_str,
-            end=date_str,
+            start=start_str,
+            end=end_str,
             ktype=KLType.K_DAY,
-            autype=AuType.QFQ, # 默认前复权
+            autype=AuType.QFQ,
             session=Session.ALL
         )
 
         if ret != RET_OK:
-            logger.error(f"富途数据源获取失败 ({formatted_code} @ {date_str}): {data}")
+            logger.error(f"富途批量抓取失败 ({formatted_code}): {data}")
             return None
 
         if data.empty:
             return None
 
-        # 转换为标准字段格式
         df = pd.DataFrame()
-        # 富途返回的 time_key 格式为 "YYYY-MM-DD HH:MM:SS"
         df[KlineFields.TRADE_DATE] = data['time_key'].apply(lambda x: x.split(' ')[0])
         df[KlineFields.STOCK_CODE] = data['code']
         df[KlineFields.OPEN] = data['open']
@@ -123,6 +122,10 @@ class FutuDataSource(BaseDataSource):
         df[KlineFields.FETCH_TIME] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         return df
+
+    def fetch_daily_kline(self, stock_code: str, trade_date: datetime) -> Optional[pd.DataFrame]:
+        """复用批量接口"""
+        return self.fetch_historical_kline(stock_code, trade_date, trade_date)
 
     def close(self):
         if self._quote_ctx:

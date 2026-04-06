@@ -21,30 +21,56 @@ class CsvStorage:
         file_name = f"{market_name}_{clean_code}_daily_kline.csv"
         return os.path.join(market_dir, file_name)
 
+    def clear_market_data(self):
+        """
+        清理逻辑：仅删除 data/ 下的市场子目录，保留根目录及其中的文件。
+        """
+        import shutil
+        if not os.path.exists(self.root_path):
+            return
+            
+        for item in os.listdir(self.root_path):
+            item_path = os.path.join(self.root_path, item)
+            if os.path.isdir(item_path):
+                try:
+                    shutil.rmtree(item_path)
+                    logger.warning(f"已清理市场目录: {item_path}")
+                except Exception as e:
+                    logger.error(f"清理目录 {item_path} 失败: {e}")
+
     def save_data(self, df: pd.DataFrame, market_name: str):
         """
         保存 DataFrame 到 CSV，支持增量写入和去重。
+        优化：针对多行数据进行批量处理，减少 IO 次数。
+        增强：强制按照 STANDARD_FIELDS 排序，确保列顺序始终一致。
         """
         if df is None or df.empty:
             return
 
-        for _, row in df.iterrows():
-            stock_code = row["stock_code"]
-            trade_date = row["trade_date"]
-            file_path = self._get_file_path(market_name, stock_code, trade_date)
+        # 强制列重排，确保不一致的数据源也能按标准落盘
+        try:
+            df = df[STANDARD_FIELDS]
+        except KeyError as e:
+            logger.error(f"保存数据失败，缺失必要字段: {e}")
+            return
+
+        # 将 trade_date 转为字符串以方便处理
+        if not pd.api.types.is_string_dtype(df["trade_date"]):
+            df["trade_date"] = df["trade_date"].dt.strftime("%Y-%m-%d")
+
+        # 按标的和年份分组处理
+        for (stock_code, year), group in df.groupby(["stock_code", df["trade_date"].str[:4]]):
+            trade_date_sample = group.iloc[0]["trade_date"]
+            file_path = self._get_file_path(market_name, stock_code, trade_date_sample)
             
-            # 增量写入逻辑
             if os.path.exists(file_path):
-                # 检查是否已存在该日期的数据
                 existing_df = pd.read_csv(file_path)
-                if trade_date in existing_df["trade_date"].values.tolist():
-                    logger.debug(f"跳过重复数据: {stock_code} @ {trade_date}")
-                    continue
-                
-                # 追加模式
-                row.to_frame().T.to_csv(file_path, mode='a', header=False, index=False)
-                logger.info(f"追加数据成功: {stock_code} @ {trade_date} -> {file_path}")
+                # 过滤掉已存在的日期
+                new_data = group[~group["trade_date"].isin(existing_df["trade_date"].values.tolist())]
+                if not new_data.empty:
+                    new_data.to_csv(file_path, mode='a', header=False, index=False)
+                    logger.info(f"追加 {len(new_data)} 条数据: {stock_code} -> {file_path}")
             else:
                 # 首次创建
-                row.to_frame().T.to_csv(file_path, mode='w', header=True, index=False)
-                logger.info(f"首次创建并保存数据: {stock_code} @ {trade_date} -> {file_path}")
+                group.to_csv(file_path, mode='w', header=True, index=False)
+                logger.info(f"首次创建并保存 {len(group)} 条数据: {stock_code} -> {file_path}")

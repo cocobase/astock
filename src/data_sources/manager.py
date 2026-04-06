@@ -44,3 +44,29 @@ class DataSourceManager:
             logger.error(f"数据源 {source_name} 在所有重试后均失败，切换至下一优先级")
         
         return None
+
+    def fetch_historical_with_failover(self, market_priority: List[str], stock_code: str, start_date: datetime, end_date: datetime) -> Optional[pd.DataFrame]:
+        """
+        批量获取历史日K数据，支持失败重试和自动切换。
+        """
+        for source_name in market_priority:
+            source = self.sources.get(source_name)
+            if not source:
+                continue
+
+            for attempt in range(self.retry_count + 1):
+                try:
+                    logger.debug(f"尝试从 {source_name} 获取历史数据 {stock_code} ({attempt+1}/{self.retry_count+1})")
+                    data = source.fetch_historical_kline(stock_code, start_date, end_date)
+                    
+                    if data is not None and not data.empty:
+                        return data
+                except Exception as e:
+                    logger.error(f"数据源 {source_name} 批量获取异常: {e}")
+                
+                if attempt < self.retry_count:
+                    time.sleep(1)
+
+            logger.error(f"数据源 {source_name} 历史获取在所有重试后均失败")
+        
+        return None
