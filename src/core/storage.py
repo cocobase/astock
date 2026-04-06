@@ -42,8 +42,16 @@ class CsvStorage:
         """
         保存 DataFrame 到 CSV，支持增量写入和去重。
         优化：针对多行数据进行批量处理，减少 IO 次数。
+        增强：强制按照 STANDARD_FIELDS 排序，确保列顺序始终一致。
         """
         if df is None or df.empty:
+            return
+
+        # 强制列重排，确保不一致的数据源也能按标准落盘
+        try:
+            df = df[STANDARD_FIELDS]
+        except KeyError as e:
+            logger.error(f"保存数据失败，缺失必要字段: {e}")
             return
 
         # 将 trade_date 转为字符串以方便处理

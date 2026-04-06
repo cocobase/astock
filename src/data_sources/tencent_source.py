@@ -168,8 +168,10 @@ class TencentDataSource(BaseDataSource):
                     rows.append({
                         KlineFields.TRADE_DATE: dt_str,
                         KlineFields.STOCK_CODE: stock_code,
-                        KlineFields.OPEN: float(k[1]), KlineFields.CLOSE: float(k[2]),
-                        KlineFields.HIGH: float(k[3]), KlineFields.LOW: float(k[4]),
+                        KlineFields.OPEN: float(k[1]), 
+                        KlineFields.HIGH: float(k[3]), 
+                        KlineFields.LOW: float(k[4]),
+                        KlineFields.CLOSE: float(k[2]),
                         KlineFields.VOLUME: int(volume),
                         KlineFields.AMOUNT: float(k[2]) * volume, # 估算金额
                         KlineFields.ADJ_TYPE: adj_val,
