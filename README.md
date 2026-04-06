@@ -2,42 +2,42 @@
 
 ## 1. 项目简介
 
-`astock` 是一个面向 **A股 / 港股 / 美股** 的多源收盘日 K 线自动获取与持久化工具。
+`astock` 是一个面向 **A股 / 港股 / 美股** 的多源收盘日 K 线自动获取、初始化与持久化工具。
 
 项目核心目标：
-- **智能调度**：基于 `exchange_calendars` 自动判断各市场交易状态，仅在收盘后或非交易日执行数据补录。
-- **高可靠性**：支持 `tencent`, `futu`, `yfinance`, `akshare` 等多数据源按优先级自动切换（Failover）。
-- **历史回溯**：集成腾讯财经历史 K 线接口，支持全天候补录过去 320 天内的任意交易日数据。
-- **数据标准化**：统一不同数据源的 OHLCV 字段、复权类型（支持 QFQ）及数值单位（A股自动手转股）。
-- **本地持久化**：以 CSV 格式增量存储，自带去重逻辑。
+- **全生命周期管理**：支持从 **一键初始化历史数据** 到 **每日增量补录** 的完整数据闭环。
+- **智能调度**：基于 `exchange_calendars` 自动判断各市场交易状态，仅在收盘后或非交易日执行任务。
+- **高性能批量抓取**：针对初始化场景优化，利用 `tencent`, `akshare`, `yfinance`, `futu` 的历史批量接口，效率比传统循环抓取提升数倍。
+- **高可靠性**：支持多数据源按优先级自动切换（Failover），确保数据获取不中断。
+- **数据标准化**：强制执行 **STANDARD_FIELDS** 列排序校验（OHLCV 顺序），确保不同来源数据落盘格式严格统一。
+- **本地持久化**：以 CSV 格式存储，按年/市场分目录管理，自带增量去重逻辑。
 
 ---
 
 ## 2. 核心能力
 
-### 2.1 市场状态判断
-系统实时监控三大市场（A股、港股、美股）的交易日历：
-- **自动定位**：准确计算“最后一个交易日”，无论当前是否处于交易时段。
-- **时区感知**：完美处理美股与亚洲市场的时差问题。
+### 2.1 历史数据初始化 (`--init`)
+为新项目或新标的一键补全历史 K 线：
+- **深度自定义**：支持通过 `--days` 参数指定回溯天数（默认 365 天）。
+- **精准清理**：初始化前自动清理旧数据目录，保留非数据配置文件（如 `.gitkeep`）。
+- **交互安全**：强制执行交互式确认（y/N），防止生产环境误删。
 
-### 2.2 多源数据引擎
+### 2.2 市场状态判断
+系统实时监控三大市场（XSHG, XHKG, XNYS）的交易日历：
+- **时区感知**：自动处理美股与亚洲市场的时差，确保在正确的市场时间点触发抓取。
+- **日历回溯**：通过 `get_recent_trading_days` 准确识别过去 N 个真实的交易日期。
+
+### 2.3 多源数据引擎
 | 数据源 | 覆盖市场 | 优势 | 备注 |
 | :--- | :--- | :--- | :--- |
-| **tencent** | A/HK/US | **推荐**。支持历史、前复权、自动识别美股后缀、响应极快。 | 历史接口缺失 Amount，采用 Close*Volume 估算。 |
-| **futu** | HK | 官方 API，数据极其精准。 | 需本地运行 FutuOpenD 客户端。 |
-| **yfinance** | US | 覆盖面广，原生支持前复权。 | 依赖网络环境。 |
-| **akshare** | A | 备选源。 | - |
+| **tencent** | A/HK/US | **推荐**。支持范围查询、响应极快、自动识别美股后缀。 | 历史接口采用 Close*Volume 估算 Amount。 |
+| **futu** | HK/A/US | 官方 API，数据极其精准。 | 需本地运行 FutuOpenD 客户端。 |
+| **yfinance** | US | 覆盖面广，原生支持前复权。 | 依赖网络环境，支持代理配置。 |
+| **akshare** | A | 国内开源首选，接口丰富。 | - |
 
-### 2.3 智能代码转换 (Symbol Transformer)
-用户只需在配置中输入标准格式（如 `US.AAPL`, `SH.600519`），系统会自动处理：
-- **A股**: `SH.600519` -> `sh600519`，并处理成交量“手”与“股”的转换。
-- **港股**: `HK.00700` -> `hk00700`。
-- **美股**: 自动匹配交易所后缀（如 `AAPL` -> `usAAPL.OQ`, `WMT` -> `usWMT.N`）。
-
-### 2.4 数据存储逻辑
-路径结构：`data/{market}/{year}/{market}_{code}_daily_kline.csv`
-- **增量写入**：仅追加新数据，不破坏历史记录。
-- **严格去重**：基于 `trade_date` 确保唯一性。
+### 2.4 数据质量保障
+- **强制列排序**：无论数据源返回的字典顺序如何，落盘前均强制重排为 `trade_date, stock_code, open, high, low, close, volume, amount...`。
+- **字段校验**：保存前自动检查必要字段，缺失关键数据将安全报错并跳过，防止污染磁盘文件。
 
 ---
 
@@ -48,23 +48,20 @@ astock/
 ├─ config/
 │  └─ config.yaml                # 项目配置文件
 ├─ data/                         # CSV 数据存储目录
-├─ docs/                         # 设计文档与参考资料
-│  ├─ tencent-hist-migration-design.md # 腾讯历史接口迁移设计
-│  └─ tencent_finance_api_reference.md # 腾讯 API 详细参考
+├─ docs/                         # 设计文档
+│  ├─ feat-init-data-v01.md      # 初始化功能设计方案 (NEW)
+│  └─ tencent_finance_api_reference.md # 腾讯 API 参考
 ├─ src/
-│  ├─ main.py                    # 启动入口
+│  ├─ main.py                    # 启动入口 (支持 --run, --init, --status)
 │  ├─ core/
-│  │  ├─ storage.py              # CSV 存储逻辑
-│  │  └─ manager.py              # 数据源 Failover 调度
-│  ├─ data_sources/
-│  │  ├─ tencent_source.py       # 核心：腾讯财经多源接口 (NEW)
-│  │  ├─ futu_source.py          # 富途牛牛接口
-│  │  └─ yfinance_source.py      # Yahoo Finance 接口
-│  └─ trading_calendar/
-│     └─ checker.py              # 市场日历校验
+│  │  ├─ storage.py              # CSV 存储与列排序校验
+│  │  └─ manager.py              # 批量历史/单日 Failover 调度
+│  ├─ data_sources/              # 各类数据源适配器
+│  └─ trading_calendar/          # 市场日历校验
 └─ tests/
-    ├─ test_tencent_pytest.py    # 腾讯接口覆盖测试
-    └─ test_trading_calendar_checker.py # 日历逻辑测试
+    ├─ test_init_workflow.py     # 初始化全流程集成测试 (NEW)
+    ├─ test_recent_days.py       # 交易日回溯逻辑测试 (NEW)
+    └─ test_tencent_pytest.py    # 腾讯接口覆盖测试
 ```
 
 ---
@@ -75,56 +72,51 @@ astock/
 ```bash
 pip install -r requirements.txt
 ```
-*注：本项目依赖 `pandas`, `requests`, `exchange_calendars`, `yfinance`, `futu-api` 等库。*
 
-### 4.2 配置标的
-编辑 `config/config.yaml`，在对应市场的 `codes` 列表中添加股票：
-```yaml
-market_configs:
-  A-Share:
-    codes: ["SH.600519", "SZ.000858"]
-  US:
-    codes: ["US.NVDA", "US.AAPL"]
+### 4.2 运行任务
+
+**1. 初始化历史数据（首次使用或增加新标的时）**：
+```bash
+# 初始化过去 1 年的数据（会清空原有数据目录，需确认）
+python3 src/main.py --init --days 365
 ```
 
-### 4.3 运行任务
-
-**查看市场闭市状态**：
+**2. 执行每日增量采集（建议放入 Crontab）**：
 ```bash
-export PYTHONPATH=$PYTHONPATH:.
-python3 src/main.py --status
-```
-
-**执行全量采集**：
-```bash
+# 仅下载最后一个交易日的最新数据
 python3 src/main.py --run
+```
+
+**3. 查看各市场当前状态**：
+```bash
+python3 src/main.py --status
 ```
 
 ---
 
 ## 5. 测试验证
 
-系统配备了严谨的测试套件，建议在发布或重大修改后运行：
-
-**腾讯接口全覆盖测试 (A/HK/US/复权/降级)**：
+**初始化全流程模拟测试**：
 ```bash
-pytest tests/test_tencent_pytest.py -v
+python3 tests/test_init_workflow.py
 ```
 
-**交易日历逻辑测试**：
+**腾讯接口全覆盖测试**：
 ```bash
-pytest tests/test_trading_calendar_checker.py -v
+pytest tests/test_tencent_pytest.py -v
 ```
 
 ---
 
 ## 6. 版本记录 (Roadmap)
-- **V1.0 (Current)**: 
-    - [x] 实现基于腾讯财经的历史 K 线补录。
-    - [x] 支持 A/HK/US 多市场日历感知。
-    - [x] 建立完善的 Failover 数据源调度机制。
-    - [x] 实现美股交易所后缀自动识别逻辑。
+- **V1.1 (Current)**: 
+    - [x] 实现 `--init` 历史数据一键初始化。
+    - [x] 全面支持数据源历史批量抓取接口。
+    - [x] 存储层强制执行标准列顺序（OHLCV）与字段校验。
+    - [x] 优化 `CsvStorage` 大批量数据保存性能。
+- **V1.0**: 
+    - [x] 实现基于腾讯财经的历史 K 线增量补录。
+    - [x] 建立 Failover 数据源调度机制。
 - **Future**:
     - [ ] 集成飞书/钉钉推送通知。
-    - [ ] 增加环境变量支持（`.env`）以剥离敏感配置。
     - [ ] 增加 Web 监控看板。
