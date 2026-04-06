@@ -15,7 +15,7 @@ market_configs:
     calendar: "XNYS"  # NYSE 纽交所
     timezone: "America/New_York"
     priority: [ "yfinance", "tencent","akshare", "futu"]
-    codes: ["US.NVDA", "US.AAPL", "US.GOOGL", "US.MSFT", "US.AMZN", "US.META", "US.AVGO", "US.TSLA", "US.SPX", "US.WMT"]
+    codes: ["US.NVDA", "US.AAPL", "US.GOOGL", "US.MSFT", "US.AMZN", "US.META", "US.AVGO", "US.TSLA", "US.JPM", "US.WMT","US.TME"]
 
 data_sources:
   futu:

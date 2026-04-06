@@ -1,19 +1,23 @@
 import requests
 import pandas as pd
-from datetime import datetime
-from typing import Optional
+import json
+from datetime import datetime, timedelta
+from typing import Optional, List, Dict
 from loguru import logger
 from src.data_sources.base import BaseDataSource
 from src.constants import KlineFields, AdjType
 
 class TencentDataSource(BaseDataSource):
     """
-    腾讯财经数据源，提供 A 股、港股、美股的实时行情快照。
-    由于该接口仅提供当前快照，fetch_daily_kline 仅在 trade_date 为当前交易日时有效。
+    腾讯财经数据源，提供 A 股、港股、美股的历史 K 线和实时行情。
+    支持前复权、后复权和不复权。
     """
     def __init__(self, proxy: Optional[str] = None):
         self._source_name = "tencent"
-        self._base_url = "https://qt.gtimg.cn/q="
+        self._snapshot_url = "https://qt.gtimg.cn/q="
+        self._hist_url = "https://web.ifzq.gtimg.cn/appstock/app/fqkline/get"
+        self._us_hist_url = "https://web.ifzq.gtimg.cn/appstock/app/usfqkline/get"
+        self._hk_hist_url = "https://web.ifzq.gtimg.cn/appstock/app/hkfqkline/get"
         self._proxy = proxy
         self._session = requests.Session()
         if self._proxy:
@@ -21,6 +25,14 @@ class TencentDataSource(BaseDataSource):
                 'http': self._proxy,
                 'https': self._proxy,
             }
+        
+        # 常用美股后缀映射表 (Symbol -> Suffix)
+        self._us_suffix_map = {
+            "AAPL": ".OQ", "NVDA": ".OQ", "MSFT": ".OQ", "GOOGL": ".OQ", "AMZN": ".OQ",
+            "META": ".OQ", "AVGO": ".OQ", "TSLA": ".OQ", "NFLX": ".OQ", "COST": ".OQ",
+            "JPM": ".N", "V": ".N", "MA": ".N", "WMT": ".N", "PG": ".N", "XOM": ".N",
+            "DIS": ".N", "KO": ".N", "NKE": ".N", "BA": ".N", "GS": ".N"
+        }
 
     @property
     def source_name(self) -> str:
@@ -30,23 +42,17 @@ class TencentDataSource(BaseDataSource):
         """检查腾讯接口连通性"""
         try:
             # 使用上证指数代码进行健康检查
-            response = self._session.get(f"{self._base_url}sh000001", timeout=5)
+            response = self._session.get(f"{self._snapshot_url}sh000001", timeout=5)
             return response.status_code == 200
         except Exception as e:
             logger.error(f"Tencent DataSource health check failed: {e}")
             return False
 
-    def _convert_code(self, stock_code: str) -> str:
-        """
-        将代码转换为腾讯识别的格式
-        SH.600519 -> sh600519
-        SZ.000001 -> sz000001
-        HK.00700  -> hk00700
-        US.AAPL   -> usAAPL
-        """
+    def _transform_symbol(self, stock_code: str, for_hist: bool = False) -> str:
+        """转换代码格式"""
         parts = stock_code.split('.')
         if len(parts) != 2:
-            return stock_code
+            return stock_code.lower()
         
         market, code = parts
         if market == "SH":
@@ -54,120 +60,116 @@ class TencentDataSource(BaseDataSource):
         elif market == "SZ":
             return f"sz{code}"
         elif market == "HK":
-            # 补齐 5 位
             return f"hk{code.zfill(5)}"
         elif market == "US":
+            if for_hist:
+                suffix = self._us_suffix_map.get(code.upper(), ".OQ")
+                return f"us{code}{suffix}"
             return f"us{code}"
-        return code
+        return code.lower()
 
-    def _parse_trade_date(self, fields: list) -> Optional[str]:
-        """
-        根据不同市场定义的索引解析交易日期：
-        A股: 索引 30 (YYYYMMDDHHMMSS)
-        港股: 索引 30 (YYYY/MM/DD HH:MM:SS) - 文档说是 28，实测 30
-        美股: 索引 30 (YYYY-MM-DD HH:MM:SS) - 文档说是 28，实测 30
-        """
-        try:
-            # 统一尝试从索引 30 获取
-            if len(fields) <= 30:
-                return None
+    def _build_hist_url(self, symbol: str, start_date: str, end_date: str, adj: str) -> str:
+        """构造历史 K 线请求 URL"""
+        market = symbol[:2].lower()
+        base_url = self._hist_url
+        if market == "us":
+            base_url = self._us_hist_url
+        elif market == "hk":
+            base_url = self._hk_hist_url
             
-            ts_str = fields[30]
-            if not ts_str:
-                return None
-            
-            # A股格式: 20260403161427
-            if len(ts_str) >= 8 and ts_str[:8].isdigit() and '/' not in ts_str and '-' not in ts_str:
-                return f"{ts_str[:4]}-{ts_str[4:6]}-{ts_str[6:8]}"
-            
-            # 港股格式: 2026/04/02 16:08:34
-            if '/' in ts_str:
-                return ts_str.split(' ')[0].replace('/', '-')
-            
-            # 美股格式: 2026-04-02 16:00:02
-            if '-' in ts_str and ' ' in ts_str:
-                return ts_str.split(' ')[0]
-            
-            return None
-        except Exception as e:
-            logger.debug(f"解析时间戳失败: {e}")
-            return None
+        adj_param = adj if adj in ['qfq', 'hfq'] else ""
+        # 数量设为 320 以确保能覆盖到目标日期
+        param = f"{symbol},day,{start_date},{end_date},320,{adj_param}"
+        return f"{base_url}?param={param}"
 
-    def fetch_daily_kline(self, stock_code: str, trade_date: datetime) -> Optional[pd.DataFrame]:
-        # 由于腾讯接口仅提供实时快照，如果 trade_date 不是今天，我们无法获取历史 K 线
-        # 注意：在实际自动化运行中，收盘后运行此程序，trade_date 应为当日
-        now = datetime.now()
-        if trade_date.date() != now.date():
-            logger.warning(f"Tencent DataSource 仅支持获取当日快照，无法获取历史日期 {trade_date.strftime('%Y-%m-%d')} 的数据")
-            return None
-
-        symbol = self._convert_code(stock_code)
-        url = f"{self._base_url}{symbol}"
-        
+    def _fetch_from_snapshot(self, stock_code: str, trade_date: datetime) -> Optional[pd.DataFrame]:
+        """从快照接口获取数据"""
+        symbol = self._transform_symbol(stock_code, for_hist=False)
+        url = f"{self._snapshot_url}{symbol}"
         try:
             response = self._session.get(url, timeout=10)
-            # 腾讯接口通常返回 GBK
             response.encoding = 'gbk'
             text = response.text
-            if not text or "v_pv_none_match" in text:
-                logger.warning(f"Tencent 未能获取到数据: {stock_code} ({symbol})")
-                return None
-
-            # 解析数据: v_sh600519="1~贵州茅台~600519~1460.00~1459.88~1459.54~...";
-            if '=' not in text:
+            if not text or "v_pv_none_match" in text or "=" not in text:
                 return None
             
             val_part = text.split('=', 1)[1].strip().strip('"').strip(';')
             fields = val_part.split('~')
             
-            # 获取市场前缀
-            market_prefix = symbol[:2].lower()
-            
-            try:
-                # 统一字段 (基于观察到的索引)
-                # 3: Close, 5: Open, 33: High, 34: Low, 6: Volume, 37: Amount
-                open_price = float(fields[5])
-                high_price = float(fields[33])
-                low_price = float(fields[34])
-                close_price = float(fields[3])
-                
-                if market_prefix in ['sh', 'sz']:
-                    # A 股字段
-                    volume = float(fields[6]) * 100 # 手 -> 股
-                    amount = float(fields[37]) * 10000 # 万元 -> 元
-                else:
-                    # 港美股字段
-                    volume = float(fields[6]) # 股
-                    amount = float(fields[37]) # 对应货币单位 (HKD/USD)
-            except (IndexError, ValueError) as e:
-                logger.error(f"解析数据字段失败 ({stock_code}): {e}")
+            # 通用索引: 3:Close, 5:Open, 33:High, 34:Low, 6:Volume, 37:Amount
+            if len(fields) <= 37:
                 return None
-
-            # 获取数据中的实际日期
-            real_date = self._parse_trade_date(fields)
-            if real_date and real_date != trade_date.strftime("%Y-%m-%d"):
-                logger.warning(f"Tencent 接口数据日期 {real_date} 与请求日期 {trade_date.strftime('%Y-%m-%d')} 不一致")
-                final_date = real_date
-            else:
-                final_date = trade_date.strftime("%Y-%m-%d")
-
-            # 统一字段映射
-            result_df = pd.DataFrame([{
-                KlineFields.TRADE_DATE: final_date,
+                
+            open_p, high_p, low_p, close_p = float(fields[5]), float(fields[33]), float(fields[34]), float(fields[3])
+            volume = float(fields[6])
+            amount = float(fields[37])
+            
+            market_prefix = symbol[:2].lower()
+            if market_prefix in ['sh', 'sz']:
+                volume *= 100 # 手 -> 股
+                amount *= 10000 # 万元 -> 元
+            
+            return pd.DataFrame([{
+                KlineFields.TRADE_DATE: trade_date.strftime("%Y-%m-%d"),
                 KlineFields.STOCK_CODE: stock_code,
-                KlineFields.OPEN: open_price,
-                KlineFields.HIGH: high_price,
-                KlineFields.LOW: low_price,
-                KlineFields.CLOSE: close_price,
-                KlineFields.VOLUME: volume,
-                KlineFields.AMOUNT: amount,
-                KlineFields.ADJ_TYPE: AdjType.NONE.value,
-                KlineFields.SOURCE: self.source_name,
+                KlineFields.OPEN: open_p, KlineFields.HIGH: high_p, KlineFields.LOW: low_p, KlineFields.CLOSE: close_p,
+                KlineFields.VOLUME: int(volume), KlineFields.AMOUNT: amount,
+                KlineFields.ADJ_TYPE: AdjType.NONE.value, KlineFields.SOURCE: self.source_name,
                 KlineFields.FETCH_TIME: datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             }])
+        except Exception as e:
+            logger.debug(f"Snapshot fallback failed for {stock_code}: {e}")
+            return None
 
-            return result_df
+    def fetch_daily_kline(self, stock_code: str, trade_date: datetime, adj: AdjType = AdjType.NONE) -> Optional[pd.DataFrame]:
+        """主入口"""
+        date_str = trade_date.strftime("%Y-%m-%d")
+        symbol = self._transform_symbol(stock_code, for_hist=True)
+        adj_val = adj.value if adj else ""
+        
+        # 尝试历史接口
+        url = self._build_hist_url(symbol, date_str, date_str, adj_val)
+        try:
+            response = self._session.get(url, timeout=10)
+            data = response.json()
+            
+            # 美股容错：如果失败且带 .OQ，尝试 .N
+            if data.get('code') != 0 and "us" in symbol and ".OQ" in symbol:
+                symbol_alt = symbol.replace(".OQ", ".N")
+                url_alt = self._build_hist_url(symbol_alt, date_str, date_str, adj_val)
+                resp_alt = self._session.get(url_alt, timeout=10)
+                if resp_alt.status_code == 200:
+                    data = resp_alt.json()
+                    if data.get('code') == 0:
+                        symbol = symbol_alt
+
+            if data.get('code') == 0:
+                # 解析 JSON
+                market_data = data.get('data', {}).get(symbol, {})
+                kline_key = f"{adj_val}day" if adj_val else "day"
+                kline_list = market_data.get(kline_key) or market_data.get("day")
+                
+                if kline_list:
+                    # 匹配日期
+                    target = next((k for k in kline_list if k[0] == date_str), None)
+                    if target:
+                        open_p, close_p, high_p, low_p, volume = float(target[1]), float(target[2]), float(target[3]), float(target[4]), float(target[5])
+                        if symbol.startswith('sh') or symbol.startswith('sz'):
+                            volume *= 100
+                        
+                        return pd.DataFrame([{
+                            KlineFields.TRADE_DATE: date_str,
+                            KlineFields.STOCK_CODE: stock_code,
+                            KlineFields.OPEN: open_p, KlineFields.HIGH: high_p, KlineFields.LOW: low_p, KlineFields.CLOSE: close_p,
+                            KlineFields.VOLUME: int(volume), KlineFields.AMOUNT: close_p * volume,
+                            KlineFields.ADJ_TYPE: adj.value if adj else AdjType.NONE.value,
+                            KlineFields.SOURCE: self.source_name,
+                            KlineFields.FETCH_TIME: datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        }])
+
+            # 若历史接口失败或无数据，降级到快照 (仅支持当日或最后交易日)
+            return self._fetch_from_snapshot(stock_code, trade_date)
 
         except Exception as e:
-            logger.error(f"Tencent 获取数据异常 ({stock_code}): {e}")
-            return None
+            logger.error(f"Tencent fetch error ({stock_code}): {e}")
+            return self._fetch_from_snapshot(stock_code, trade_date)
