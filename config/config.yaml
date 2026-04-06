@@ -4,18 +4,18 @@ market_configs:
   A-Share:
     calendar: "XSHG"  # SSE 上海证券交易所 (exchange_calendars 使用 ISO 编码)
     timezone: "Asia/Shanghai"
-    priority: ["akshare", "yfinance", "tencent"]
+    priority: ["tencent", "yfinance", "akshare"]
     codes: ["SH.600519", "SH.601398", "SH.601288", "SH.601939", "SH.601857", "SH.600941", "SH.601988", "SZ.300750", "SH.600036", "SH.601318"]
   HK:
     calendar: "XHKG"  # HKEX 港交所
     timezone: "Asia/Hong_Kong"
-    priority: ["futu", "yfinance", "akshare", "tencent"]
+    priority: ["futu", "tencent","yfinance", "akshare"]
     codes: ["HK.09988", "HK.00700", "HK.00939", "HK.03968", "HK.00005", "HK.03988", "HK.00941", "HK.01299", "HK.01211", "HK.01398"]
   US:
     calendar: "XNYS"  # NYSE 纽交所
     timezone: "America/New_York"
-    priority: [ "yfinance", "akshare", "futu", "tencent"]
-    codes: ["US.NVDA", "US.AAPL", "US.GOOGL", "US.MSFT", "US.AMZN", "US.META", "US.AVGO", "US.TSLA", "US.BRK.B", "US.WMT"]
+    priority: [ "yfinance", "tencent","akshare", "futu"]
+    codes: ["US.NVDA", "US.AAPL", "US.GOOGL", "US.MSFT", "US.AMZN", "US.META", "US.AVGO", "US.TSLA", "US.SPX", "US.WMT"]
 
 data_sources:
   futu:
