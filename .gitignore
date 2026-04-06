@@ -152,3 +152,4 @@ cython_debug/
 
 # Project specific ignores
 logs/
+data/

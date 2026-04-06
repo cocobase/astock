@@ -21,22 +21,25 @@ class AkshareDataSource(BaseDataSource):
     def _convert_code(self, stock_code: str) -> tuple[str, str]:
         """
         将代码转换为 AKShare 识别的格式
-        SH.600519 -> (600519, A-Share)
-        SZ.300750 -> (300750, A-Share)
-        HK.09988  -> (09988, HK)
-        US.AAPL   -> (AAPL, US)
+        支持 SH.600519 或 600519.SH 等格式
         """
         parts = stock_code.split('.')
         if len(parts) != 2:
             return stock_code, "Unknown"
         
-        prefix, code = parts
-        if prefix in ["SH", "SZ"]:
+        p1, p2 = parts[0].upper(), parts[1].upper()
+        if p1 in ["SH", "SZ", "HK", "US"]:
+            market, code = p1, parts[1]
+        elif p2 in ["SH", "SZ", "HK", "US"]:
+            market, code = p2, parts[0]
+        else:
+            return stock_code, "Unknown"
+
+        if market in ["SH", "SZ"]:
             return code, "A-Share"
-        elif prefix == "HK":
-            # 港股代码 AKShare 通常需要去前导 0 或者保持 5 位
+        elif market == "HK":
             return code, "HK"
-        elif prefix == "US":
+        elif market == "US":
             return code, "US"
         return code, "Unknown"
 
