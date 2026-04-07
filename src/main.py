@@ -1,4 +1,5 @@
 import argparse
+import asyncio
 from loguru import logger
 from src.core.config_loader import ConfigLoader
 from src.core.logger import setup_logger
@@ -45,7 +46,7 @@ def format_market_status_overview(market_status_overview: dict) -> str:
     return "\n".join(lines).rstrip()
 
 
-def main():
+async def main_async():
     # 1. 初始化配置与日志
     config_loader = ConfigLoader()
     global_settings = config_loader.get_global_settings()
@@ -55,12 +56,12 @@ def main():
     )
     
     args = parse_args()
-    logger.info("=== 多市场收盘日K获取系统启动 (Phase 1 架构解耦重构) ===")
+    logger.info("=== 多市场收盘日K获取系统启动 (Phase 2 异步重构) ===")
     
-    # 2. 打印市场状态总览 (无论哪种模式都显示)
+    # 2. 打印市场状态总览 (由于是启动检查，这里可以用 to_thread 封装同步库调用)
     calendar_checker = CalendarChecker()
     market_configs = config_loader.config.get("market_configs", {})
-    market_status_overview = calendar_checker.get_all_market_statuses(market_configs)
+    market_status_overview = await asyncio.to_thread(calendar_checker.get_all_market_statuses, market_configs)
     logger.info("\n" + format_market_status_overview(market_status_overview))
 
     if args.status:
@@ -79,15 +80,18 @@ def main():
 
     if workflow:
         try:
-            workflow.setup()
-            workflow.run(args)
+            await workflow.setup()
+            await workflow.run(args)
         except Exception as e:
-            logger.exception(f"工作流执行过程中发生异常: {e}")
+            logger.exception(f"异步工作流执行过程中发生异常: {e}")
         finally:
-            workflow.cleanup()
+            await workflow.cleanup()
 
     logger.info("=== 任务运行结束 ===")
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        asyncio.run(main_async())
+    except KeyboardInterrupt:
+        logger.warning("用户强制中断程序执行")

@@ -33,3 +33,5 @@ global_settings:
   storage_root: "./data"
   log_root: "./logs"
   default_adj_type: "qfq" # qfq, hfq, none
+  request_interval: 0.5   # 每次请求间的休眠时间 (秒)，用于 QPS 控制
+  max_concurrency: 5      # 最大并发数 (Phase 2.1 引入)
