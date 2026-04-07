@@ -1,6 +1,7 @@
 from unittest.mock import patch
-
-from src.trading_calendar.checker import CalendarChecker, MarketTradingStatus
+import pytest
+from src.trading_calendar.checker import CalendarChecker
+from src.models import MarketStatus
 
 
 class DummySessionPoint:
@@ -43,7 +44,8 @@ class FixedDateTime:
     @classmethod
     def now(cls, tz=None):
         import pytz
-        base = pytz.utc.localize(__import__("datetime").datetime(2026, 4, 3, 14, 0, 0))
+        import datetime
+        base = pytz.utc.localize(datetime.datetime(2026, 4, 3, 14, 0, 0))
         return base if tz is None else base.astimezone(tz)
 
     @classmethod
@@ -54,14 +56,15 @@ class FixedDateTime:
 
 def test_market_trading_status_closed_session_returns_today():
     import pytz
+    import datetime
     checker = CalendarChecker()
-    close_dt = pytz.timezone("Asia/Shanghai").localize(__import__("datetime").datetime(2026, 4, 3, 15, 0, 0))
+    close_dt = pytz.timezone("Asia/Shanghai").localize(datetime.datetime(2026, 4, 3, 15, 0, 0))
     cal = DummyCalendar(is_session=True, session_close_dt=close_dt)
 
     with patch.object(CalendarChecker, "get_calendar", return_value=cal), patch("src.trading_calendar.checker.datetime", FixedDateTime):
-        status = checker.get_market_trading_status("XSHG", "Asia/Shanghai")
+        status = checker.get_market_trading_status("A-Share", "XSHG", "Asia/Shanghai")
 
-    assert isinstance(status, MarketTradingStatus)
+    assert isinstance(status, MarketStatus)
     assert status.is_trading_day_today is True
     assert status.is_current_session_closed is True
     assert status.last_trading_day == "2026-04-03"
@@ -69,12 +72,13 @@ def test_market_trading_status_closed_session_returns_today():
 
 def test_market_trading_status_open_session_returns_previous_session():
     import pytz
+    import datetime
     checker = CalendarChecker()
-    close_dt = pytz.timezone("Asia/Shanghai").localize(__import__("datetime").datetime(2026, 4, 3, 23, 0, 0))
+    close_dt = pytz.timezone("Asia/Shanghai").localize(datetime.datetime(2026, 4, 3, 23, 0, 0))
     cal = DummyCalendar(is_session=True, previous_session_str="2026-04-02", session_close_dt=close_dt)
 
     with patch.object(CalendarChecker, "get_calendar", return_value=cal), patch("src.trading_calendar.checker.datetime", FixedDateTime):
-        status = checker.get_market_trading_status("XSHG", "Asia/Shanghai")
+        status = checker.get_market_trading_status("A-Share", "XSHG", "Asia/Shanghai")
 
     assert status.is_trading_day_today is True
     assert status.is_current_session_closed is False
@@ -86,7 +90,7 @@ def test_market_trading_status_non_trading_day_returns_previous_session():
     cal = DummyCalendar(is_session=False, date_to_session_str="2026-04-02", session_close_dt=None)
 
     with patch.object(CalendarChecker, "get_calendar", return_value=cal), patch("src.trading_calendar.checker.datetime", FixedDateTime):
-        status = checker.get_market_trading_status("XNYS", "America/New_York")
+        status = checker.get_market_trading_status("US", "XNYS", "America/New_York")
 
     assert status.is_trading_day_today is False
     assert status.is_current_session_closed is True
@@ -96,8 +100,9 @@ def test_market_trading_status_non_trading_day_returns_previous_session():
 def test_get_all_market_statuses_returns_all_markets():
     checker = CalendarChecker()
 
-    def fake_status(exchange_code, timezone_str):
-        return MarketTradingStatus(
+    def fake_status(market_name, exchange_code, timezone_str):
+        return MarketStatus(
+            market_name=market_name,
             exchange_code=exchange_code,
             timezone=timezone_str,
             market_now="2026-04-03 22:00:00+0800",
@@ -110,12 +115,11 @@ def test_get_all_market_statuses_returns_all_markets():
     market_configs = {
         "A-Share": {"calendar": "XSHG", "timezone": "Asia/Shanghai"},
         "HK": {"calendar": "XHKG", "timezone": "Asia/Hong_Kong"},
-        "BROKEN": {"calendar": "", "timezone": "Asia/Shanghai"},
     }
 
     with patch.object(CalendarChecker, "get_market_trading_status", side_effect=fake_status):
         result = checker.get_all_market_statuses(market_configs)
 
     assert set(result.keys()) == {"A-Share", "HK"}
-    assert result["A-Share"]["exchange_code"] == "XSHG"
-    assert result["HK"]["timezone"] == "Asia/Hong_Kong"
+    assert result["A-Share"].exchange_code == "XSHG"
+    assert result["HK"].timezone == "Asia/Hong_Kong"

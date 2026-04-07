@@ -19,11 +19,19 @@ class CsvStorage(BaseStorage):
     def _get_clean_code(self, stock_code: str) -> str:
         """代码格式转换逻辑（原逻辑迁移）"""
         code = stock_code.strip().upper()
+        # 处理 HK 前缀
         if code.startswith("HK."):
-            # 去除前缀并填充为 5 位
             return code.replace("HK.", "").zfill(5)
+        
+        # 处理 SH/SZ/US 前缀或后缀
+        # 前缀情况: SH.600000
         if code.startswith(("SH.", "SZ.", "US.")):
             return code.split(".")[-1]
+        
+        # 后缀情况: 600000.SH
+        if code.endswith((".SH", ".SZ", ".US")):
+            return code.split(".")[0]
+            
         return code
 
     def get_data_path(self, stock_code: str, market: str) -> str:

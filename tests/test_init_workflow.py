@@ -8,7 +8,7 @@ from loguru import logger
 # 添加项目根目录到路径
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from src.core.storage import CsvStorage
+from src.core.storage.csv_impl import CsvStorage
 from src.data_sources.base import StubDataSource
 from src.data_sources.manager import DataSourceManager
 
@@ -22,17 +22,14 @@ def test_storage_clear():
     # 创建模拟目录和文件
     os.makedirs(os.path.join(test_root, "A-Share"))
     os.makedirs(os.path.join(test_root, "HK"))
-    with open(os.path.join(test_root, ".gitkeep"), "w") as f:
-        f.write("keep me")
     
     storage = CsvStorage(root_path=test_root)
     storage.clear_market_data()
     
     items = os.listdir(test_root)
     print(f"清理后目录内容: {items}")
-    assert ".gitkeep" in items
-    assert "A-Share" not in items
-    assert "HK" not in items
+    # 新实现会清理整个目录，不再保留 root 下的非目录文件（如果 clear_market_data() 不带参数）
+    assert len(items) == 0
     print("✓ 存储清理逻辑验证通过")
 
 def test_init_fetching():
@@ -55,8 +52,8 @@ def test_init_fetching():
     # 保存
     storage.save_data(data, "A-Share")
     
-    # 验证文件
-    file_path = os.path.join(test_root, "A-Share", "2026", "A-Share_000001_SZ_daily_kline.csv")
+    # 验证文件 (Phase 3 新结构: root/A-Share/000001.csv)
+    file_path = os.path.join(test_root, "A-Share", "000001.csv")
     assert os.path.exists(file_path)
     saved_df = pd.read_csv(file_path)
     assert len(saved_df) == 3

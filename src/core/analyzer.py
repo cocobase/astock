@@ -21,7 +21,8 @@ class DataAnalyzer:
             logger.info(f"开始计算市场 {market_name} 的涨幅 (共 {len(codes)} 个标的)")
 
             for code in codes:
-                df = self.storage.get_last_n_rows(market_name, code, n=2)
+                # CsvStorage.get_last_n_rows 接口现在是 (stock_code, n)
+                df = self.storage.get_last_n_rows(code, n=2)
                 
                 if df is None or df.empty:
                     logger.warning(f"标的 {code} ({market_name}) 无本地数据，跳过")

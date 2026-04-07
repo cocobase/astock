@@ -21,7 +21,7 @@ class SyncDailyWorkflow(BaseWorkflow):
         codes = m_config.get("codes", [])
         
         # 获取市场交易状态 (目前 calendar_checker 还是同步的，用 to_thread 包装)
-        market_status = await asyncio.to_thread(self.calendar_checker.get_market_trading_status, exchange_code, timezone)
+        market_status = await asyncio.to_thread(self.calendar_checker.get_market_trading_status, market_name, exchange_code, timezone)
         target_date = datetime.strptime(market_status.last_trading_day, "%Y-%m-%d")
         date_str = target_date.strftime("%Y-%m-%d")
 
