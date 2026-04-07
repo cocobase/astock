@@ -7,7 +7,7 @@ name = "astock"
 version = "1.0.0"
 description = "A multi-source historical K-line fetcher for A-Share, HK, and US markets."
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.13"
 authors = [
     {name = "imac", email = "imac@example.com"}
 ]
@@ -18,7 +18,8 @@ dependencies = [
     "loguru",
     "exchange-calendars",
     "yfinance",
-    "futu-api"
+    "futu-api",
+    "akshare"
 ]
 
 [project.optional-dependencies]
