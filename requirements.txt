@@ -5,5 +5,7 @@ loguru
 exchange-calendars
 yfinance
 futu-api
+akshare
+tqdm
 pytest
 freezegun

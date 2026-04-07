@@ -10,6 +10,7 @@ from src.data_sources.akshare_source import AkshareDataSource
 from src.data_sources.yfinance_source import YFinanceDataSource
 from src.data_sources.tencent_source import TencentDataSource
 from src.core.storage import CsvStorage
+from src.core.analyzer import DataAnalyzer
 from src.constants import Market
 from loguru import logger
 
@@ -20,13 +21,14 @@ def parse_args():
     parser.add_argument("--run", action="store_true", help="执行增量下载任务")
     parser.add_argument("--init", action="store_true", help="初始化历史K线数据（会清空现有数据）")
     parser.add_argument("--days", type=int, default=365, help="初始化历史天数，默认365天")
+    parser.add_argument("--calc-pct", action="store_true", help="计算本地数据的最新涨幅并汇总导出")
     args = parser.parse_args()
 
-    active_modes = [args.status, args.run, args.init]
+    active_modes = [args.status, args.run, args.init, args.calc_pct]
     if sum(active_modes) > 1:
-        parser.error("--status, --run, --init 不能同时使用")
+        parser.error("--status, --run, --init, --calc-pct 不能同时使用")
     if sum(active_modes) == 0:
-        parser.error("必须指定 --status, --run 或 --init")
+        parser.error("必须指定 --status, --run, --init 或 --calc-pct")
 
     return args
 
@@ -86,6 +88,13 @@ def main():
             return
         logger.warning("正在清理现有数据目录...")
         storage.clear_market_data()
+
+    if args.calc_pct:
+        logger.info("检测到 --calc-pct，执行最新涨幅计算任务")
+        analyzer = DataAnalyzer(storage, config_loader)
+        analyzer.calculate_pct_change()
+        logger.info("=== 任务运行结束 ===")
+        return
 
     # 3. 初始化数据源管理器
     manager = DataSourceManager(

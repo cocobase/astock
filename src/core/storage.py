@@ -7,6 +7,30 @@ class CsvStorage:
     def __init__(self, root_path="./data"):
         self.root_path = root_path
 
+    def _get_clean_code(self, market_name: str, stock_code: str) -> str:
+        """
+        统一清理代码：去掉市场前缀/后缀，并对港股补零。
+        """
+        clean_code = stock_code
+        # 去掉前缀
+        for prefix in ["HK.", "SH.", "SZ.", "US.", "HK_", "SH_", "SZ_", "US_"]:
+            if clean_code.startswith(prefix):
+                clean_code = clean_code[len(prefix):]
+        # 去掉后缀
+        if "." in clean_code:
+            parts = clean_code.split(".")
+            if parts[-1].upper() in ["HK", "SH", "SZ", "US"]:
+                clean_code = parts[0]
+        
+        # 替换剩余的点
+        clean_code = clean_code.replace('.', '_')
+
+        # 港股补零
+        if market_name == "HK" and clean_code.isdigit():
+            clean_code = clean_code.zfill(5)
+            
+        return clean_code
+
     def _get_file_path(self, market_name: str, stock_code: str, trade_date: str) -> str:
         """
         根据规则生成文件路径: data/{market}/{year}/{market}_{code}_daily_kline.csv
@@ -16,8 +40,7 @@ class CsvStorage:
         if not os.path.exists(market_dir):
             os.makedirs(market_dir)
         
-        # 将代码中的特殊字符（如点）进行替换或清理，防止文件名问题
-        clean_code = stock_code.replace('.', '_')
+        clean_code = self._get_clean_code(market_name, stock_code)
         file_name = f"{market_name}_{clean_code}_daily_kline.csv"
         return os.path.join(market_dir, file_name)
 
@@ -37,6 +60,56 @@ class CsvStorage:
                     logger.warning(f"已清理市场目录: {item_path}")
                 except Exception as e:
                     logger.error(f"清理目录 {item_path} 失败: {e}")
+
+    def _find_available_years(self, market_name: str) -> list:
+        """
+        获取指定市场下所有可用的年份目录，并按从新到旧排序。
+        """
+        market_path = os.path.join(self.root_path, market_name)
+        if not os.path.exists(market_path):
+            return []
+        
+        years = [d for d in os.listdir(market_path) if os.path.isdir(os.path.join(market_path, d)) and d.isdigit()]
+        return sorted(years, reverse=True)
+
+    def get_last_n_rows(self, market_name: str, stock_code: str, n: int = 2) -> pd.DataFrame:
+        """
+        根据规则跨年份获取指定标的的最后 n 行数据。
+        """
+        years = self._find_available_years(market_name)
+        combined_df = pd.DataFrame()
+        
+        clean_code = self._get_clean_code(market_name, stock_code)
+        target_file_name = f"{market_name}_{clean_code}_daily_kline.csv"
+
+        for year in years:
+            year_dir = os.path.join(self.root_path, market_name, year)
+            file_path = os.path.join(year_dir, target_file_name)
+            
+            # 如果标准路径不存在，尝试模糊搜索包含 clean_code 的文件（兼容旧格式）
+            if not os.path.exists(file_path):
+                if os.path.exists(year_dir):
+                    potential_files = [f for f in os.listdir(year_dir) if clean_code in f and f.endswith(".csv")]
+                    if potential_files:
+                        # 找到多个时取第一个（通常只有一个）
+                        file_path = os.path.join(year_dir, potential_files[0])
+                        logger.debug(f"通过模糊匹配找到数据文件: {file_path}")
+
+            if os.path.exists(file_path):
+                # 考虑到文件可能较小（一年约250行），直接读取。如果后续文件巨大，可优化为从末尾 seek。
+                try:
+                    df = pd.read_csv(file_path)
+                    if not df.empty:
+                        # 取当前文件的最后几行
+                        current_rows = df.tail(n - len(combined_df))
+                        combined_df = pd.concat([current_rows, combined_df], ignore_index=True)
+                except Exception as e:
+                    logger.error(f"读取文件 {file_path} 失败: {e}")
+                
+                if len(combined_df) >= n:
+                    break
+        
+        return combined_df.tail(n)
 
     def save_data(self, df: pd.DataFrame, market_name: str):
         """
