@@ -33,14 +33,14 @@ def format_market_status_overview(market_status_overview: dict) -> str:
     for market_name, status in market_status_overview.items():
         lines.extend([
             f"[{market_name}]",
-            f"  交易所: {status.get('exchange_code', '')}",
-            f"  时区: {status.get('timezone', '')}",
-            f"  当前时间: {status.get('market_now', '')}",
-            f"  当前市场日期: {status.get('market_date', '')}",
-            f"  今日是否交易日: {status.get('is_trading_day_today', '')}",
-            f"  当日交易时段是否结束: {status.get('is_current_session_closed', '')}",
-            f"  最后一个交易日: {status.get('last_trading_day', '')}",
-            f"  日历来源: {status.get('calendar_source', '')}",
+            f"  交易所: {status.exchange_code}",
+            f"  时区: {status.timezone}",
+            f"  当前时间: {status.market_now}",
+            f"  当前市场日期: {status.market_date}",
+            f"  今日是否交易日: {status.is_trading_day_today}",
+            f"  当日交易时段是否结束: {status.is_current_session_closed}",
+            f"  最后一个交易日: {status.last_trading_day}",
+            f"  日历来源: {status.calendar_source}",
             ""
         ])
     return "\n".join(lines).rstrip()
